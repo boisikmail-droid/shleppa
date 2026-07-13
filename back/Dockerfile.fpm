@@ -1,0 +1,11 @@
+FROM newinterface-php-fpm:latest
+
+RUN docker-php-ext-install pdo_mysql
+
+WORKDIR /var/www/html
+
+COPY docker/entrypoint-fpm.sh /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["php-fpm"]
