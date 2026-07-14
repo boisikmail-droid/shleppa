@@ -16,12 +16,23 @@ if [ ! -d "vendor" ] || [ -z "$(ls -A vendor 2>/dev/null)" ]; then
 fi
 
 run_console() {
-    su -s /bin/sh www-data -c "cd /var/www/html && php bin/console $*"
+    # Prefer root for first-boot bootstrap; FPM itself still runs as www-data
+    php bin/console "$@" || return $?
 }
 
-run_console doctrine:database:create --if-not-exists 2>/dev/null || true
-run_console doctrine:migrations:migrate --no-interaction 2>/dev/null || true
-run_console app:import-words 2>/dev/null || true
+echo "==> doctrine:database:create"
+run_console doctrine:database:create --if-not-exists || true
+
+echo "==> doctrine:migrations:migrate"
+run_console doctrine:migrations:migrate --no-interaction || true
+
+WORD_COUNT="$(php bin/console dbal:run-sql "SELECT COUNT(*) AS c FROM word_pool" --quiet 2>/dev/null | tr -dc '0-9' || echo 0)"
+if [ -z "$WORD_COUNT" ] || [ "$WORD_COUNT" -lt 1 ]; then
+    echo "==> app:import-words (word_pool empty or missing)"
+    run_console app:import-words || true
+else
+    echo "==> words already present ($WORD_COUNT), skip import"
+fi
 
 ensure_var_dirs
 
