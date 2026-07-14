@@ -81,3 +81,9 @@ docker exec -it hat_php php bin/console app:import-words
 ## Переменные окружения
 
 См. `back/.env` и `docker/docker-compose.yml`.
+
+## Деплой на VPS
+
+Продакшен-стек (nginx + собранный фронт + PHP-FPM + MySQL): `docker/docker-compose.prod.yml`.
+
+Пошаговая инструкция: SSH без пароля, автодеплой при push в `main`, доступ из браузера — в [deploy/DEPLOY.md](deploy/DEPLOY.md).
