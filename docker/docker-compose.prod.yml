@@ -1,6 +1,6 @@
 services:
   db:
-    image: mysql:8.0
+    image: mariadb:10.11
     container_name: hat_mysql
     restart: unless-stopped
     environment:
@@ -11,10 +11,11 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 30
+      start_period: 40s
 
   php:
     build:
@@ -23,7 +24,7 @@ services:
     container_name: hat_php
     restart: unless-stopped
     environment:
-      DATABASE_URL: mysql://hat_user:${MYSQL_PASSWORD:-hat_password}@db:3306/hat_game?serverVersion=8.0
+      DATABASE_URL: mysql://hat_user:${MYSQL_PASSWORD:-hat_password}@db:3306/hat_game?serverVersion=10.11.2-MariaDB&charset=utf8mb4
       APP_ENV: prod
       APP_DEBUG: 0
       CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN:-*}
