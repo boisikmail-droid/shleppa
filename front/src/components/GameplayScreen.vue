@@ -1,5 +1,5 @@
 <template>
-  <div class="gameplay">
+  <div class="gameplay" :class="{ 'gameplay--paused': paused }">
     <header class="gameplay-header">
       <div class="gameplay-header__round">
         <span class="gameplay-header__icon">{{ roundTitle.icon }}</span>
@@ -31,12 +31,23 @@
 
     <p class="gameplay-subtitle">{{ roundTitle.text }}</p>
 
-    <Timer
-      :duration="gameStore.timeLimit"
-      :is-active="true"
-      @tick="onTick"
-      @timeout="onTimeout"
-    />
+    <div class="gameplay-timer-row">
+      <Timer
+        :duration="gameStore.timeLimit"
+        :is-active="true"
+        :paused="paused"
+        @tick="onTick"
+        @timeout="onTimeout"
+      />
+      <button
+        v-if="!paused"
+        type="button"
+        class="button-secondary gameplay-pause-btn"
+        @click="paused = true"
+      >
+        Пауза
+      </button>
+    </div>
 
     <WordCard
       v-if="gameStore.currentWord"
@@ -47,17 +58,26 @@
     <div class="action-row">
       <button
         class="button-guess"
-        :disabled="locked"
+        :disabled="locked || paused"
         @click="doAction('guess')"
       >
         Верно
       </button>
       <button
         class="button-skip"
-        :disabled="locked"
+        :disabled="locked || paused"
         @click="doAction('skip')"
       >
         Пропуск
+      </button>
+    </div>
+
+    <div v-if="paused" class="pause-overlay" role="dialog" aria-modal="true" aria-label="Пауза">
+      <p class="pause-overlay__title">Пауза</p>
+      <p class="pause-overlay__hint">Таймер остановлен. Можно отвлечься.</p>
+      <p class="pause-overlay__time">{{ pauseTimeLabel }}</p>
+      <button type="button" class="button-primary pause-overlay__resume" @click="paused = false">
+        Продолжить
       </button>
     </div>
   </div>
@@ -75,21 +95,30 @@ const emit = defineEmits(['guess', 'skip', 'timeout'])
 
 const gameStore = useGameStore()
 const locked = ref(false)
+const paused = ref(false)
 
 const roundTitle = computed(() =>
   getRoundTitle(gameStore.status, gameStore.round)
 )
+
+const pauseTimeLabel = computed(() => {
+  const r = gameStore.turnTimeRemaining ?? gameStore.timeLimit
+  const m = Math.floor(r / 60)
+  const s = r % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+})
 
 function onTick(remaining) {
   gameStore.turnTimeRemaining = remaining
 }
 
 function onTimeout() {
+  paused.value = false
   emit('timeout')
 }
 
 async function doAction(action) {
-  if (locked.value || !gameStore.currentWord) return
+  if (paused.value || locked.value || !gameStore.currentWord) return
 
   if (action === 'guess') playGuess()
   else playSkip()
@@ -111,6 +140,10 @@ async function doAction(action) {
 </script>
 
 <style scoped>
+.gameplay {
+  position: relative;
+}
+
 .gameplay-header {
   display: flex;
   align-items: center;
@@ -229,5 +262,65 @@ async function doAction(action) {
   text-transform: uppercase;
   color: var(--text-dim);
   margin: 0 0 8px;
+}
+
+.gameplay-timer-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.gameplay-pause-btn {
+  min-width: 140px;
+  padding: 10px 18px;
+  font-size: 0.85rem;
+}
+
+.pause-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(201, 162, 39, 0.12), transparent 55%),
+    rgba(7, 6, 8, 0.92);
+  backdrop-filter: blur(6px);
+}
+
+.pause-overlay__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.8rem, 12vw, 4.5rem);
+  font-weight: 700;
+  line-height: 0.95;
+  color: var(--gold-bright);
+  letter-spacing: 0.04em;
+}
+
+.pause-overlay__hint {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.pause-overlay__time {
+  margin: 4px 0 8px;
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.pause-overlay__resume {
+  width: min(100%, 320px);
+  margin-top: 4px;
 }
 </style>

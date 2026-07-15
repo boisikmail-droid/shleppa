@@ -323,6 +323,10 @@ input[type="number"]:focus {
   animation: noir-pulse 1s infinite;
 }
 
+.timer-paused {
+  opacity: 0.55;
+}
+
 @keyframes noir-pulse {
   0%, 100% { opacity: 1; text-shadow: 0 0 30px var(--crimson-bright); }
   50% { opacity: 0.55; text-shadow: 0 0 8px var(--crimson); }

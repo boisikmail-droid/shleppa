@@ -1,7 +1,13 @@
 <template>
   <div
     class="timer"
-    :class="[colorClass, { 'timer-critical': remaining <= 10 && isActive }]"
+    :class="[
+      colorClass,
+      {
+        'timer-critical': remaining <= 10 && isActive && !paused,
+        'timer-paused': paused,
+      },
+    ]"
   >
     {{ formatted }}
   </div>
@@ -15,6 +21,7 @@ import { playFiveSecondWarning, playTimeUp } from '../services/timerSounds'
 const props = defineProps({
   duration: { type: Number, required: true },
   isActive: { type: Boolean, default: false },
+  paused: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['timeout', 'tick'])
@@ -38,7 +45,7 @@ function handleTick(r) {
   remaining.value = r
   emit('tick', r)
 
-  if (r === 5 && !warnedAt5.value) {
+  if (r === 5 && !warnedAt5.value && !props.paused) {
     warnedAt5.value = true
     playFiveSecondWarning()
   }
@@ -59,12 +66,27 @@ watch(
       remaining.value = props.duration
       warnedAt5.value = false
       timer.start(props.duration)
+      if (props.paused) {
+        timer.pause()
+      }
     } else {
       timer.stop()
       warnedAt5.value = false
     }
   },
   { immediate: true }
+)
+
+watch(
+  () => props.paused,
+  (paused) => {
+    if (!props.isActive) return
+    if (paused) {
+      timer.pause()
+    } else {
+      timer.resume()
+    }
+  }
 )
 
 onUnmounted(() => timer.stop())
