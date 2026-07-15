@@ -54,6 +54,15 @@ export default {
     })
   },
 
+  resolveLastWord(sessionId, turnId, wordId, teamId = null) {
+    return api.post('/game/last-word', {
+      session_id: sessionId,
+      turn_id: turnId,
+      word_id: wordId,
+      team_id: teamId,
+    })
+  },
+
   finishTurn(sessionId, turnId, corrections) {
     return api.post('/game/turn/finish', {
       session_id: sessionId,

@@ -295,6 +295,82 @@ class GameSessionService
     }
 
     /**
+     * Last word after the timer: open to all teams.
+     * If $awardTeamId is set — mark guessed and +1 to that team.
+     * If null — word stays in the hat.
+     *
+     * @return array{awarded: bool, awarded_team_id: int|null, remaining_words: int}
+     */
+    public function resolveLastWord(
+        GameSession $session,
+        int $turnId,
+        int $wordId,
+        ?int $awardTeamId,
+    ): array {
+        if ($session->getStatus() === GameSession::STATUS_FINISHED) {
+            throw new \InvalidArgumentException('Game is finished');
+        }
+
+        $turn = $this->gameTurnRepository->find($turnId);
+        if (!$turn || $turn->getSession()->getId() !== $session->getId() || $turn->isFinished()) {
+            throw new \InvalidArgumentException('Turn is not active');
+        }
+
+        $word = $this->entityManager->find(Word::class, $wordId);
+        if (!$word) {
+            throw new \InvalidArgumentException('Word not found');
+        }
+
+        $round = $session->getRoundNumber();
+        $progress = $this->roundProgressRepository->findBySessionWordRound(
+            $session->getId(),
+            $wordId,
+            $round
+        );
+        if (!$progress) {
+            throw new \InvalidArgumentException('Word is not in this round');
+        }
+
+        $awardedTeamId = null;
+
+        if ($awardTeamId !== null) {
+            $awardTeam = $this->entityManager->find(Team::class, $awardTeamId);
+            if (!$awardTeam || $awardTeam->getSession()?->getId() !== $session->getId()) {
+                throw new \InvalidArgumentException('Invalid team');
+            }
+
+            if (!$progress->isGuessedInThisRound()) {
+                $progress->setIsGuessedInThisRound(true);
+                $awardTeam->setScore($awardTeam->getScore() + 1);
+                $awardedTeamId = $awardTeam->getId();
+
+                $state = $this->teamDifficultyStateRepository->findBySessionTeamRound(
+                    $session->getId(),
+                    $awardTeam->getId(),
+                    $round
+                );
+                $state?->applyGuessDifficultyUpdate();
+            } else {
+                $awardedTeamId = $awardTeamId;
+            }
+        }
+
+        $this->entityManager->flush();
+
+        $remaining = $this->roundProgressRepository->countUnguessedInRound(
+            $session->getId(),
+            $round,
+            $session->getWordsData()
+        );
+
+        return [
+            'awarded' => $awardedTeamId !== null,
+            'awarded_team_id' => $awardedTeamId,
+            'remaining_words' => $remaining,
+        ];
+    }
+
+    /**
      * @param array<int, array{word_id: int, checked: bool}> $correctionsList
      */
     public function finishTurn(GameSession $session, int $turnId, array $correctionsList): array

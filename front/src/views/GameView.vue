@@ -66,6 +66,10 @@ function handleSkip() {
 }
 
 function handleTimeout() {
+  // last-word flow already switches to correction via resolveLastWord()
+  if (gameStore.screen === 'correction' || gameStore.screen === 'results') {
+    return
+  }
   gameStore.endTurnLocally()
 }
 

@@ -173,6 +173,35 @@ export const useGameStore = defineStore('game', {
       this.screen = 'correction'
     },
 
+    async resolveLastWord(teamId = null) {
+      const word = this.currentWord
+      if (!word || !this.turnId) {
+        this.endTurnLocally()
+        return { awarded: false }
+      }
+
+      const { data } = await api.resolveLastWord(
+        this.sessionId,
+        this.turnId,
+        word.word_id,
+        teamId
+      )
+
+      if (data.remaining_words !== undefined) {
+        this.remainingWords = data.remaining_words
+      }
+
+      if (data.awarded && data.awarded_team_id) {
+        const team = this.teams.find((t) => t.id === data.awarded_team_id)
+        if (team) {
+          team.score += 1
+        }
+      }
+
+      this.endTurnLocally()
+      return data
+    },
+
     async finishTurn(corrections) {
       const { data } = await api.finishTurn(this.sessionId, this.turnId, corrections)
       this.turnId = null

@@ -1,5 +1,11 @@
 <template>
-  <div class="gameplay" :class="{ 'gameplay--paused': paused }">
+  <div
+    class="gameplay"
+    :class="{
+      'gameplay--paused': paused,
+      'gameplay--timeup': timeUp,
+    }"
+  >
     <header class="gameplay-header">
       <div class="gameplay-header__round">
         <span class="gameplay-header__icon">{{ roundTitle.icon }}</span>
@@ -29,10 +35,14 @@
       </div>
     </header>
 
-    <p class="gameplay-subtitle">{{ roundTitle.text }}</p>
+    <p class="gameplay-subtitle">
+      {{ timeUp ? 'Общее слово — могут угадывать все' : roundTitle.text }}
+    </p>
 
     <div class="gameplay-timer-row">
+      <p v-if="timeUp" class="time-up-label">Время вышло</p>
       <Timer
+        v-else
         :duration="gameStore.timeLimit"
         :is-active="true"
         :paused="paused"
@@ -40,7 +50,7 @@
         @timeout="onTimeout"
       />
       <button
-        v-if="!paused"
+        v-if="!paused && !timeUp"
         type="button"
         class="button-secondary gameplay-pause-btn"
         @click="paused = true"
@@ -55,7 +65,7 @@
       :difficulty="gameStore.currentWord.difficulty"
     />
 
-    <div class="action-row">
+    <div v-if="!timeUp" class="action-row">
       <button
         class="button-guess"
         :disabled="locked || paused"
@@ -72,12 +82,63 @@
       </button>
     </div>
 
+    <div v-else class="action-row action-row--timeup">
+      <button
+        class="button-guess"
+        :disabled="locked || pickingTeam"
+        @click="pickingTeam = true"
+      >
+        Угадано
+      </button>
+      <button
+        class="button-skip"
+        :disabled="locked || pickingTeam"
+        @click="missLastWord"
+      >
+        Никто не угадал
+      </button>
+    </div>
+
     <div v-if="paused" class="pause-overlay" role="dialog" aria-modal="true" aria-label="Пауза">
       <p class="pause-overlay__title">Пауза</p>
       <p class="pause-overlay__hint">Таймер остановлен. Можно отвлечься.</p>
       <p class="pause-overlay__time">{{ pauseTimeLabel }}</p>
       <button type="button" class="button-primary pause-overlay__resume" @click="paused = false">
         Продолжить
+      </button>
+    </div>
+
+    <div
+      v-if="pickingTeam"
+      class="award-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Кому присудить очко"
+    >
+      <p class="award-overlay__title">Кому очко?</p>
+      <p class="award-overlay__hint">
+        «{{ gameStore.currentWord?.word_text }}» — выберите команду
+      </p>
+      <div class="award-overlay__teams">
+        <button
+          v-for="t in gameStore.teams"
+          :key="t.id"
+          type="button"
+          class="button-secondary award-overlay__team"
+          :disabled="locked"
+          @click="awardLastWord(t.id)"
+        >
+          <span class="award-overlay__team-name">{{ t.name }}</span>
+          <span class="award-overlay__team-score">{{ t.score }}</span>
+        </button>
+      </div>
+      <button
+        type="button"
+        class="award-overlay__back"
+        :disabled="locked"
+        @click="pickingTeam = false"
+      >
+        Назад
       </button>
     </div>
   </div>
@@ -96,6 +157,8 @@ const emit = defineEmits(['guess', 'skip', 'timeout'])
 const gameStore = useGameStore()
 const locked = ref(false)
 const paused = ref(false)
+const timeUp = ref(false)
+const pickingTeam = ref(false)
 
 const roundTitle = computed(() =>
   getRoundTitle(gameStore.status, gameStore.round)
@@ -114,11 +177,16 @@ function onTick(remaining) {
 
 function onTimeout() {
   paused.value = false
-  emit('timeout')
+  if (!gameStore.currentWord) {
+    emit('timeout')
+    return
+  }
+  timeUp.value = true
+  gameStore.turnTimeRemaining = 0
 }
 
 async function doAction(action) {
-  if (paused.value || locked.value || !gameStore.currentWord) return
+  if (timeUp.value || paused.value || locked.value || !gameStore.currentWord) return
 
   if (action === 'guess') playGuess()
   else playSkip()
@@ -135,6 +203,32 @@ async function doAction(action) {
     setTimeout(() => {
       locked.value = false
     }, 500)
+  }
+}
+
+async function awardLastWord(teamId) {
+  if (locked.value) return
+  locked.value = true
+  playGuess()
+  try {
+    await gameStore.resolveLastWord(teamId)
+    pickingTeam.value = false
+    emit('timeout')
+  } finally {
+    locked.value = false
+  }
+}
+
+async function missLastWord() {
+  if (locked.value) return
+  locked.value = true
+  playSkip()
+  try {
+    await gameStore.resolveLastWord(null)
+    pickingTeam.value = false
+    emit('timeout')
+  } finally {
+    locked.value = false
   }
 }
 </script>
@@ -264,12 +358,30 @@ async function doAction(action) {
   margin: 0 0 8px;
 }
 
+.gameplay--timeup .gameplay-subtitle {
+  color: var(--crimson-bright);
+}
+
 .gameplay-timer-row {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
   margin-bottom: 4px;
+  min-height: 5.5rem;
+  justify-content: center;
+}
+
+.time-up-label {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 8vw, 3.4rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  color: var(--crimson-bright);
+  text-align: center;
+  text-shadow: 0 0 28px rgba(196, 30, 58, 0.35);
 }
 
 .gameplay-pause-btn {
@@ -278,7 +390,12 @@ async function doAction(action) {
   font-size: 0.85rem;
 }
 
-.pause-overlay {
+.action-row--timeup {
+  margin-top: 24px;
+}
+
+.pause-overlay,
+.award-overlay {
   position: fixed;
   inset: 0;
   z-index: 40;
@@ -294,21 +411,25 @@ async function doAction(action) {
   backdrop-filter: blur(6px);
 }
 
-.pause-overlay__title {
+.pause-overlay__title,
+.award-overlay__title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(2.8rem, 12vw, 4.5rem);
+  font-size: clamp(2.4rem, 11vw, 4rem);
   font-weight: 700;
   line-height: 0.95;
   color: var(--gold-bright);
   letter-spacing: 0.04em;
+  text-align: center;
 }
 
-.pause-overlay__hint {
+.pause-overlay__hint,
+.award-overlay__hint {
   margin: 0;
   font-size: 1.05rem;
   color: var(--text-muted);
   text-align: center;
+  max-width: 28ch;
 }
 
 .pause-overlay__time {
@@ -322,5 +443,54 @@ async function doAction(action) {
 .pause-overlay__resume {
   width: min(100%, 320px);
   margin-top: 4px;
+}
+
+.award-overlay__teams {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(100%, 360px);
+  margin-top: 8px;
+}
+
+.award-overlay__team {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 16px 18px;
+  text-align: left;
+}
+
+.award-overlay__team-name {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.award-overlay__team-score {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.award-overlay__back {
+  margin-top: 8px;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.award-overlay__back:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 </style>

@@ -213,6 +213,36 @@ class ApiController extends AbstractController
         ]);
     }
 
+    #[Route('/game/last-word', name: 'game_last_word', methods: ['POST'])]
+    public function resolveLastWord(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true) ?? [];
+        $sessionId = (int) ($data['session_id'] ?? 0);
+        $turnId = (int) ($data['turn_id'] ?? 0);
+        $wordId = (int) ($data['word_id'] ?? 0);
+        $awardTeamId = array_key_exists('team_id', $data) && $data['team_id'] !== null
+            ? (int) $data['team_id']
+            : null;
+
+        $session = $this->sessionRepository->find($sessionId);
+        if (!$session) {
+            return $this->json(['error' => 'Session not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        try {
+            $result = $this->gameSessionService->resolveLastWord(
+                $session,
+                $turnId,
+                $wordId,
+                $awardTeamId,
+            );
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
+
+        return $this->json(array_merge(['success' => true], $result));
+    }
+
     #[Route('/game/turn/finish', name: 'game_turn_finish', methods: ['POST'])]
     public function finishTurn(Request $request): JsonResponse
     {
