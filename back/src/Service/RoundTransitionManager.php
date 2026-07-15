@@ -36,8 +36,14 @@ class RoundTransitionManager
         $session->setStatus($newStatus);
 
         if ($newRound > 0) {
+            $cycle = $session->getDifficultyCycle();
+            $startDifficulty = $cycle[0] ?? 1;
             $this->roundProgressRepository->resetRound($session->getId(), $newRound);
-            $this->teamDifficultyStateRepository->resetForNewRound($session->getId(), $newRound);
+            $this->teamDifficultyStateRepository->resetForNewRound(
+                $session->getId(),
+                $newRound,
+                $startDifficulty
+            );
         }
 
         if ($newStatus !== GameSession::STATUS_FINISHED) {

@@ -38,14 +38,18 @@ const teams = computed(() =>
 )
 
 const winnerIndex = computed(() => {
-  if (teams.value.length < 2) return 0
-  return teams.value[0].score >= teams.value[1].score ? 0 : 1
+  if (!teams.value.length) return 0
+  let best = 0
+  for (let i = 1; i < teams.value.length; i++) {
+    if (teams.value[i].score > teams.value[best].score) best = i
+  }
+  return best
 })
 
 function newGame() {
   gameStore.resetGame()
   sessionStore.clearSession()
-  router.push('/')
+  router.push('/setup')
 }
 </script>
 

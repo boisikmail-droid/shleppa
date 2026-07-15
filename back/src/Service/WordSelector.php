@@ -2,7 +2,6 @@
 
 namespace App\Service;
 
-use App\Config\DifficultyConfig;
 use App\Entity\GameSession;
 use App\Entity\Team;
 use App\Entity\Word;
@@ -35,12 +34,14 @@ class WordSelector
         }
 
         $wordIds = $session->getWordsData();
+        $allowed = $session->getSelectedDifficulties();
         $startDifficulty = $state->getCurrentDifficulty();
 
-        // Сначала текущая сложность, потом +1, +2… (как в ТЗ)
+        // Сначала текущая сложность, затем следующие из выбранных
+        $ordered = $this->difficultyFallbackOrder($allowed, $startDifficulty);
+
         $word = null;
-        $difficulty = $startDifficulty;
-        while ($difficulty <= DifficultyConfig::MAX_LEVEL) {
+        foreach ($ordered as $difficulty) {
             $word = $this->roundProgressRepository->findUnguessedWordByDifficultyInSession(
                 $session->getId(),
                 $round,
@@ -52,15 +53,12 @@ class WordSelector
             if ($word) {
                 break;
             }
-
-            ++$difficulty;
         }
 
         if (!$word) {
             return null;
         }
 
-        // Все неотгаданные слова в раунде (общий пул игры)
         $unguessedInRound = $this->roundProgressRepository->countUnguessedInRound(
             $session->getId(),
             $round,
@@ -73,11 +71,56 @@ class WordSelector
         ];
     }
 
+    public function countRemaining(GameSession $session, int $round): int
+    {
+        return $this->roundProgressRepository->countUnguessedInRound(
+            $session->getId(),
+            $round,
+            $session->getWordsData()
+        );
+    }
+
     /** @param int[] $excludeWordIds */
     public function getNextWord(GameSession $session, Team $team, int $round, array $excludeWordIds = []): ?Word
     {
         $data = $this->getNextWordData($session, $team, $round, $excludeWordIds);
 
         return $data['word'] ?? null;
+    }
+
+    /**
+     * @param int[] $allowed
+     *
+     * @return int[]
+     */
+    private function difficultyFallbackOrder(array $allowed, int $start): array
+    {
+        $allowed = array_values(array_unique(array_map('intval', $allowed)));
+        sort($allowed);
+
+        if ($allowed === []) {
+            return [$start];
+        }
+
+        $idx = array_search($start, $allowed, true);
+        if ($idx === false) {
+            $idx = 0;
+            foreach ($allowed as $i => $d) {
+                if ($d >= $start) {
+                    $idx = $i;
+                    break;
+                }
+            }
+        }
+
+        $ordered = [];
+        for ($i = $idx; $i < count($allowed); ++$i) {
+            $ordered[] = $allowed[$i];
+        }
+        for ($i = 0; $i < $idx; ++$i) {
+            $ordered[] = $allowed[$i];
+        }
+
+        return $ordered;
     }
 }

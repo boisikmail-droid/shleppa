@@ -51,6 +51,9 @@ export const useGameStore = defineStore('game', {
       this.nextPlayers = data.next_players || []
       this.timeLimit = data.time_limit
       this.teams = data.teams || []
+      if (data.remaining_words !== undefined && data.remaining_words !== null) {
+        this.remainingWords = data.remaining_words
+      }
 
       if (prevStatus && prevStatus !== data.status && data.status !== 'finished') {
         this.showRoundTransition = true
@@ -111,7 +114,7 @@ export const useGameStore = defineStore('game', {
 
       if (wordRes.data.finished) {
         this.isTurnActive = false
-        this.remainingWords = 0
+        this.remainingWords = wordRes.data.remaining_words ?? 0
         this.screen = 'correction'
         return
       }
@@ -151,7 +154,7 @@ export const useGameStore = defineStore('game', {
       )
 
       if (wordRes.data.finished) {
-        this.remainingWords = 0
+        this.remainingWords = wordRes.data.remaining_words ?? this.remainingWords
         this.endTurnLocally()
         return { finished: true }
       }
@@ -165,7 +168,6 @@ export const useGameStore = defineStore('game', {
       this.isTurnActive = false
       this.currentWord = null
       this.shownWordIds = []
-      this.remainingWords = 0
       this.wordsGuessedThisTurn = 0
       this.turnTimeRemaining = null
       this.screen = 'correction'

@@ -16,8 +16,8 @@ if [ ! -d "vendor" ] || [ -z "$(ls -A vendor 2>/dev/null)" ]; then
 fi
 
 run_console() {
-    # Prefer root for first-boot bootstrap; FPM itself still runs as www-data
-    php bin/console "$@" || return $?
+    # Run as www-data so cache/log files stay writable by php-fpm
+    su -s /bin/sh www-data -c "php bin/console $(printf '%q ' "$@")" || return $?
 }
 
 echo "==> doctrine:database:create"

@@ -35,12 +35,37 @@ class ApiController extends AbstractController
     {
         $data = json_decode($request->getContent(), true) ?? [];
         $dto = new StartSessionRequest();
-        $dto->team1Name = $data['team1_name'] ?? '';
-        $dto->team1Players = $data['team1_players'] ?? [];
-        $dto->team2Name = $data['team2_name'] ?? '';
-        $dto->team2Players = $data['team2_players'] ?? [];
-        $dto->totalWords = (int) ($data['total_words'] ?? 0);
-        $dto->timeLimit = (int) ($data['time_limit'] ?? 0);
+
+        // Новый формат: teams[]
+        if (isset($data['teams']) && is_array($data['teams'])) {
+            $dto->teams = $data['teams'];
+        } else {
+            // Обратная совместимость со старым payload
+            $dto->teams = [
+                [
+                    'name' => $data['team1_name'] ?? '',
+                    'players' => $data['team1_players'] ?? [],
+                ],
+                [
+                    'name' => $data['team2_name'] ?? '',
+                    'players' => $data['team2_players'] ?? [],
+                ],
+            ];
+        }
+
+        $dto->totalWords = (int) ($data['total_words'] ?? 60);
+        $dto->timeLimit = (int) ($data['time_limit'] ?? 60);
+        $rawDifficulties = $data['difficulties'] ?? \App\Config\DifficultyConfig::allLevelIds();
+        $rawCategories = $data['categories'] ?? \App\Config\CategoryConfig::allSlugs();
+        $dto->difficulties = is_array($rawDifficulties)
+            ? array_values(array_map('intval', $rawDifficulties))
+            : \App\Config\DifficultyConfig::allLevelIds();
+        $dto->categories = is_array($rawCategories)
+            ? array_values(array_map(
+                static fn ($c) => is_scalar($c) ? (string) $c : '',
+                $rawCategories
+            ))
+            : \App\Config\CategoryConfig::allSlugs();
 
         $errors = $this->validator->validate($dto);
         if (count($errors) > 0) {
@@ -52,14 +77,28 @@ class ApiController extends AbstractController
             return $this->json(['errors' => $messages], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
-        $session = $this->gameSessionService->createSession(
-            $dto->team1Name,
-            $dto->team1Players,
-            $dto->team2Name,
-            $dto->team2Players,
-            $dto->totalWords,
-            $dto->timeLimit,
-        );
+        $normalizedTeams = [];
+        foreach ($dto->teams as $team) {
+            $normalizedTeams[] = [
+                'name' => trim((string) $team['name']),
+                'players' => array_values(array_map(
+                    static fn ($p) => trim((string) $p),
+                    $team['players'] ?? []
+                )),
+            ];
+        }
+
+        try {
+            $session = $this->gameSessionService->createSession(
+                $normalizedTeams,
+                $dto->totalWords,
+                $dto->timeLimit,
+                $dto->difficulties,
+                $dto->categories,
+            );
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['errors' => [$e->getMessage()]], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
 
         return $this->json([
             'session_id' => $session->getId(),
@@ -99,10 +138,14 @@ class ApiController extends AbstractController
 
         $wordData = $this->wordSelector->getNextWordData($session, $team, $round, $excludeWordIds);
         if (!$wordData) {
+            $remaining = $this->wordSelector->countRemaining($session, $round);
+
             return $this->json([
                 'finished' => true,
-                'message' => 'No more words in this round',
-                'remaining_words' => 0,
+                'message' => $remaining > 0
+                    ? 'No more unused words this turn'
+                    : 'No more words in this round',
+                'remaining_words' => $remaining,
             ]);
         }
 

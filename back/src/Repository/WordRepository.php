@@ -22,16 +22,35 @@ class WordRepository extends ServiceEntityRepository
             ->execute();
     }
 
-    /** @return Word[] */
-    public function findRandomByDifficulty(int $difficulty, int $limit): array
-    {
-        $ids = $this->createQueryBuilder('w')
+    /**
+     * @param string[] $categories
+     * @param int[]    $excludeIds
+     *
+     * @return Word[]
+     */
+    public function findRandomByDifficultyAndCategories(
+        int $difficulty,
+        array $categories,
+        int $limit,
+        array $excludeIds = [],
+    ): array {
+        if ($limit <= 0 || $categories === []) {
+            return [];
+        }
+
+        $qb = $this->createQueryBuilder('w')
             ->select('w.id')
             ->where('w.difficulty = :d')
+            ->andWhere('w.category IN (:cats)')
             ->setParameter('d', $difficulty)
-            ->getQuery()
-            ->getScalarResult();
+            ->setParameter('cats', $categories);
 
+        if ($excludeIds !== []) {
+            $qb->andWhere('w.id NOT IN (:exclude)')
+                ->setParameter('exclude', $excludeIds);
+        }
+
+        $ids = $qb->getQuery()->getScalarResult();
         $idList = array_column($ids, 'id');
         shuffle($idList);
         $selected = array_slice($idList, 0, $limit);
@@ -45,5 +64,15 @@ class WordRepository extends ServiceEntityRepository
             ->setParameter('ids', $selected)
             ->getQuery()
             ->getResult();
+    }
+
+    /** @deprecated kept for compatibility */
+    public function findRandomByDifficulty(int $difficulty, int $limit): array
+    {
+        return $this->findRandomByDifficultyAndCategories(
+            $difficulty,
+            \App\Config\CategoryConfig::allSlugs(),
+            $limit
+        );
     }
 }

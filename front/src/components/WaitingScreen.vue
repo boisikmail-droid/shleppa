@@ -10,6 +10,12 @@
       <p><strong>Игрок</strong> {{ gameStore.currentPlayer?.name }}</p>
 
       <div class="stat-row">
+        <span class="stat-row__label">В шляпе осталось</span>
+        <span class="stat-row__value">{{ gameStore.remainingWords }}</span>
+      </div>
+      <p class="stat-row__hint">Раунд закончится, когда будут отгаданы все слова</p>
+
+      <div class="stat-row">
         <span class="stat-row__label">Уровень слов</span>
         <DifficultyStars :level="gameStore.teamDifficulty?.currentDifficulty || 1" :title="difficultyHint" />
       </div>
@@ -19,7 +25,17 @@
         <span class="stat-row__label">До сброса уровня</span>
         <span class="stat-row__value">{{ cycleText }}</span>
       </div>
-      <p class="stat-row__hint">После {{ CYCLE_LENGTH }} угаданных слов цикл уровней начнётся снова с ★</p>
+      <p class="stat-row__hint">После {{ cycleLength }} угаданных слов цикл уровней начнётся снова</p>
+    </div>
+
+    <div class="card" v-if="gameStore.teams.length">
+      <h3>Счёт</h3>
+      <ul class="score-list">
+        <li v-for="t in gameStore.teams" :key="t.id">
+          <span>{{ t.name }}</span>
+          <strong>{{ t.score }}</strong>
+        </li>
+      </ul>
     </div>
 
     <div class="card" v-if="gameStore.nextPlayers.length">
@@ -40,7 +56,7 @@
 import { computed } from 'vue'
 import { useGameStore } from '../stores/gameStore'
 import { getRoundTitle } from '../composables/useRoundTitle'
-import { CYCLE_LENGTH, MAX_DIFFICULTY } from '../constants/difficulty'
+import { MAX_DIFFICULTY, difficultyLabel } from '../constants/difficulty'
 import DifficultyStars from './DifficultyStars.vue'
 import { initAudioOnGesture, playTurnStart } from '../services/timerSounds'
 
@@ -52,13 +68,16 @@ const roundTitle = computed(() =>
 
 const difficultyHint = computed(() => {
   const d = gameStore.teamDifficulty?.currentDifficulty || 1
-  return `Сейчас команда объясняет слова ${d}-го уровня (из ${MAX_DIFFICULTY})`
+  return `${difficultyLabel(d)} · уровень ${d} из ${MAX_DIFFICULTY}`
 })
+
+const cycleLength = computed(
+  () => gameStore.teamDifficulty?.nextResetAt ?? 10
+)
 
 const cycleText = computed(() => {
   const guessed = gameStore.teamDifficulty?.wordsGuessedInCycle ?? 0
-  const total = gameStore.teamDifficulty?.nextResetAt ?? CYCLE_LENGTH
-  return `${guessed} из ${total} угадано`
+  return `${guessed} из ${cycleLength.value} угадано`
 })
 
 async function onReady() {
@@ -131,5 +150,29 @@ async function onReady() {
   color: var(--text-dim);
   text-align: center;
   line-height: 1.4;
+}
+
+.score-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.score-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.95rem;
+}
+
+.score-list li:last-child {
+  border-bottom: none;
+}
+
+.score-list strong {
+  color: var(--gold-bright);
+  font-family: var(--font-display);
+  font-size: 1.25rem;
 }
 </style>

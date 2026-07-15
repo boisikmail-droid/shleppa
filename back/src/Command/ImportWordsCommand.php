@@ -2,6 +2,7 @@
 
 namespace App\Command;
 
+use App\Config\CategoryConfig;
 use App\Config\DifficultyConfig;
 use App\Entity\Word;
 use App\Repository\WordRepository;
@@ -14,12 +15,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand(
     name: 'app:import-words',
-    description: 'Import words into word_pool (7 difficulty levels, 100 words each)',
+    description: 'Import curated words into word_pool (categories × difficulty)',
 )]
 class ImportWordsCommand extends Command
 {
-    private const WORDS_PER_LEVEL = 100;
-
     public function __construct(
         private EntityManagerInterface $entityManager,
         private WordRepository $wordRepository,
@@ -30,77 +29,108 @@ class ImportWordsCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        $wordsByLevel = $this->loadWords($io);
+        $entries = $this->loadWords($io);
 
         $this->clearWordPool();
 
         $count = 0;
-        foreach ($wordsByLevel as $difficulty => $wordList) {
-            foreach ($wordList as $text) {
-                $text = trim($text);
-                if ($text === '') {
-                    continue;
-                }
+        foreach ($entries as [$category, $difficulty, $text]) {
+            $word = new Word();
+            $word->setText($text);
+            $word->setDifficulty($difficulty);
+            $word->setCategory($category);
+            $this->entityManager->persist($word);
+            ++$count;
 
-                $word = new Word();
-                $word->setText($text);
-                $word->setDifficulty((int) $difficulty);
-                $this->entityManager->persist($word);
-                ++$count;
+            if ($count % 500 === 0) {
+                $this->entityManager->flush();
+                $this->entityManager->clear();
             }
         }
 
         $this->entityManager->flush();
 
         $io->success(sprintf(
-            'Imported %d words (%d levels × %d words).',
+            'Imported %d unique words across %d categories.',
             $count,
-            DifficultyConfig::MAX_LEVEL,
-            self::WORDS_PER_LEVEL
+            count(CategoryConfig::CATEGORIES)
         ));
 
         return Command::SUCCESS;
     }
 
     /**
-     * @return array<int, string[]>
+     * @return list<array{0: string, 1: int, 2: string}>
      */
     private function loadWords(SymfonyStyle $io): array
     {
         $dataDir = __DIR__.'/Data';
-        $words = [];
+        $entries = [];
+        /** @var array<string, true> */
+        $seenGlobal = [];
+        $skippedDup = 0;
+        $skippedEmpty = 0;
 
-        for ($level = 1; $level <= DifficultyConfig::MAX_LEVEL; ++$level) {
-            $path = $dataDir.'/level_'.$level.'.php';
+        foreach (CategoryConfig::allSlugs() as $category) {
+            /** @var array<string, true> */
+            $seenInCategory = [];
 
-            if (!is_file($path)) {
-                throw new \RuntimeException(sprintf('Word file not found: %s', $path));
+            for ($level = 1; $level <= DifficultyConfig::MAX_LEVEL; ++$level) {
+                $path = $dataDir.'/'.$category.'/level_'.$level.'.php';
+
+                if (!is_file($path)) {
+                    throw new \RuntimeException(sprintf('Word file not found: %s', $path));
+                }
+
+                /** @var mixed $list */
+                $list = require $path;
+                if (!is_array($list)) {
+                    throw new \RuntimeException(sprintf('Invalid word file: %s', $path));
+                }
+
+                $levelCount = 0;
+                foreach ($list as $text) {
+                    $text = trim(preg_replace('/\s+/u', ' ', (string) $text) ?? '');
+                    if ($text === '') {
+                        ++$skippedEmpty;
+                        continue;
+                    }
+                    if (mb_strlen($text) > 255) {
+                        $text = mb_substr($text, 0, 255);
+                    }
+
+                    $key = mb_strtolower($text);
+                    if (isset($seenInCategory[$key]) || isset($seenGlobal[$key])) {
+                        ++$skippedDup;
+                        continue;
+                    }
+
+                    $seenInCategory[$key] = true;
+                    $seenGlobal[$key] = true;
+                    $entries[] = [$category, $level, $text];
+                    ++$levelCount;
+                }
+
+                if ($levelCount < 20) {
+                    $io->warning(sprintf('%s/%d: only %d words after dedupe', $category, $level, $levelCount));
+                }
             }
-
-            /** @var string[] $list */
-            $list = require $path;
-
-            if (count($list) !== self::WORDS_PER_LEVEL) {
-                $io->warning(sprintf(
-                    'Level %d: expected %d words, got %d (%s)',
-                    $level,
-                    self::WORDS_PER_LEVEL,
-                    count($list),
-                    basename($path)
-                ));
-            }
-
-            $words[$level] = $list;
         }
 
-        return $words;
+        if ($skippedDup > 0) {
+            $io->note(sprintf('Skipped %d duplicates', $skippedDup));
+        }
+        if ($skippedEmpty > 0) {
+            $io->note(sprintf('Skipped %d empty entries', $skippedEmpty));
+        }
+
+        return $entries;
     }
 
     private function clearWordPool(): void
     {
         $conn = $this->entityManager->getConnection();
 
-        // Переимпорт слов: сбрасываем пул и прогресс раундов (старые сессии станут неактуальны).
         $conn->executeStatement('SET FOREIGN_KEY_CHECKS=0');
         $conn->executeStatement('DELETE FROM turn_log');
         $conn->executeStatement('DELETE FROM round_progress');

@@ -2,39 +2,84 @@
 
 namespace App\DTO;
 
+use App\Config\CategoryConfig;
 use App\Config\DifficultyConfig;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 class StartSessionRequest
 {
-    #[Assert\NotBlank]
-    #[Assert\Length(min: 1, max: 100)]
-    public string $team1Name = '';
+    /**
+     * @var list<array{name?: string, players?: list<string>}>
+     */
+    #[Assert\Count(min: 2, max: 4)]
+    public array $teams = [];
+
+    #[Assert\Range(min: DifficultyConfig::MIN_WORDS, max: DifficultyConfig::MAX_WORDS)]
+    public int $totalWords = 60;
+
+    #[Assert\Range(min: DifficultyConfig::MIN_TIME, max: DifficultyConfig::MAX_TIME)]
+    public int $timeLimit = 60;
+
+    /** @var int[] */
+    #[Assert\Count(min: 1)]
+    public array $difficulties = [];
 
     /** @var string[] */
-    #[Assert\Count(min: 1, max: 10)]
-    #[Assert\All([
-        new Assert\NotBlank(),
-        new Assert\Length(min: 1, max: 100),
-    ])]
-    public array $team1Players = [];
+    #[Assert\Count(min: 1)]
+    public array $categories = [];
 
-    #[Assert\NotBlank]
-    #[Assert\Length(min: 1, max: 100)]
-    public string $team2Name = '';
+    #[Assert\Callback]
+    public function validateTeams(ExecutionContextInterface $context): void
+    {
+        foreach ($this->teams as $i => $team) {
+            $name = trim((string) ($team['name'] ?? ''));
+            if ($name === '' || mb_strlen($name) > 100) {
+                $context->buildViolation('Укажите название каждой команды (до 100 символов).')
+                    ->atPath('teams['.$i.'].name')
+                    ->addViolation();
+            }
 
-    /** @var string[] */
-    #[Assert\Count(min: 1, max: 10)]
-    #[Assert\All([
-        new Assert\NotBlank(),
-        new Assert\Length(min: 1, max: 100),
-    ])]
-    public array $team2Players = [];
+            $players = $team['players'] ?? [];
+            if (!is_array($players) || count($players) < 1 || count($players) > 10) {
+                $context->buildViolation('В каждой команде должно быть от 1 до 10 игроков.')
+                    ->atPath('teams['.$i.'].players')
+                    ->addViolation();
+                continue;
+            }
 
-    #[Assert\Range(min: 30, max: 150)]
-    #[Assert\DivisibleBy(DifficultyConfig::DISTRIBUTION_DIVISOR)]
-    public int $totalWords = 0;
+            foreach ($players as $p) {
+                $p = trim((string) $p);
+                if ($p === '' || mb_strlen($p) > 100) {
+                    $context->buildViolation('Имена игроков не должны быть пустыми.')
+                        ->atPath('teams['.$i.'].players')
+                        ->addViolation();
+                    break;
+                }
+            }
+        }
+    }
 
-    #[Assert\Range(min: 45, max: 80)]
-    public int $timeLimit = 0;
+    #[Assert\Callback]
+    public function validateFilters(ExecutionContextInterface $context): void
+    {
+        $validDiffs = DifficultyConfig::allLevelIds();
+        foreach ($this->difficulties as $d) {
+            if (!in_array((int) $d, $validDiffs, true)) {
+                $context->buildViolation('Некорректный уровень сложности.')
+                    ->atPath('difficulties')
+                    ->addViolation();
+                break;
+            }
+        }
+
+        foreach ($this->categories as $c) {
+            if (!CategoryConfig::isValid((string) $c)) {
+                $context->buildViolation('Некорректная категория слов.')
+                    ->atPath('categories')
+                    ->addViolation();
+                break;
+            }
+        }
+    }
 }

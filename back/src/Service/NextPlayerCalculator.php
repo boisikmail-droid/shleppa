@@ -33,7 +33,7 @@ class NextPlayerCalculator
     }
 
     /**
-     * Чередование: T1P0 → T2P0 → T1P1 → T2P1 → ...
+     * Чередование: T1P0 → T2P0 → T3P0 → … → T1P1 → …
      *
      * @return array<int, array{0: Team, 1: Player}>
      */
@@ -46,19 +46,21 @@ class NextPlayerCalculator
 
         usort($teams, fn (Team $a, Team $b) => $a->getId() <=> $b->getId());
 
-        $team1 = $teams[0];
-        $team2 = $teams[1];
-        $players1 = $team1->getPlayers()->toArray();
-        $players2 = $team2->getPlayers()->toArray();
-        $maxIndex = max(count($players1), count($players2)) - 1;
+        $playersByTeam = [];
+        $maxIndex = 0;
+        foreach ($teams as $team) {
+            $players = $team->getPlayers()->toArray();
+            usort($players, fn (Player $a, Player $b) => $a->getOrderIndex() <=> $b->getOrderIndex());
+            $playersByTeam[] = ['team' => $team, 'players' => $players];
+            $maxIndex = max($maxIndex, count($players) - 1);
+        }
 
         $order = [];
         for ($i = 0; $i <= $maxIndex; ++$i) {
-            if (isset($players1[$i])) {
-                $order[] = [$team1, $players1[$i]];
-            }
-            if (isset($players2[$i])) {
-                $order[] = [$team2, $players2[$i]];
+            foreach ($playersByTeam as $row) {
+                if (isset($row['players'][$i])) {
+                    $order[] = [$row['team'], $row['players'][$i]];
+                }
             }
         }
 
@@ -117,14 +119,16 @@ class NextPlayerCalculator
 
     public function isRoundComplete(GameSession $session, Team $nextTeam, Player $nextPlayer): bool
     {
-        $startTeam = $session->getRoundStartTeam();
-        $startPlayer = $session->getRoundStartPlayer();
+        // Раунд кончается только когда все слова шляпы отгаданы.
+        // Очередь игроков при этом крутится, пока шляпа не опустеет.
+        return false;
+    }
 
-        if (!$startTeam || !$startPlayer) {
-            return false;
-        }
-
-        return $nextTeam->getId() === $startTeam->getId()
-            && $nextPlayer->getId() === $startPlayer->getId();
+    /**
+     * Раунд окончен, если в текущем раунде не осталось неотгаданных слов.
+     */
+    public function isHatEmpty(GameSession $session, int $unguessedCount): bool
+    {
+        return $session->getRoundNumber() > 0 && $unguessedCount <= 0;
     }
 }

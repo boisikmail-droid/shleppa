@@ -15,7 +15,16 @@
         </div>
         <div class="stat-pill stat-pill--gold">
           <span class="stat-pill__value">{{ gameStore.wordsGuessedThisTurn }}</span>
-          <span class="stat-pill__label">отгадано</span>
+          <span class="stat-pill__label">за ход</span>
+        </div>
+        <div
+          v-for="t in gameStore.teams"
+          :key="t.id"
+          class="stat-pill"
+          :class="{ 'stat-pill--active': t.id === gameStore.currentTeam?.id }"
+        >
+          <span class="stat-pill__value">{{ t.score }}</span>
+          <span class="stat-pill__label">{{ t.name }}</span>
         </div>
       </div>
     </header>
@@ -164,7 +173,10 @@ async function doAction(action) {
 
 .gameplay-header__stats {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-end;
+  max-width: 60%;
 }
 
 .stat-pill {
@@ -181,6 +193,11 @@ async function doAction(action) {
 .stat-pill--gold {
   border-color: rgba(201, 162, 39, 0.25);
   background: rgba(201, 162, 39, 0.06);
+}
+
+.stat-pill--active {
+  border-color: rgba(201, 162, 39, 0.45);
+  box-shadow: 0 0 12px rgba(201, 162, 39, 0.15);
 }
 
 .stat-pill__value {

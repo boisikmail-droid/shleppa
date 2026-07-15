@@ -8,6 +8,8 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Entity(repositoryClass: WordRepository::class)]
 #[ORM\Table(name: 'word_pool')]
 #[ORM\Index(name: 'idx_word_difficulty', columns: ['difficulty'])]
+#[ORM\Index(name: 'idx_word_category', columns: ['category'])]
+#[ORM\Index(name: 'idx_word_diff_cat', columns: ['difficulty', 'category'])]
 class Word
 {
     #[ORM\Id]
@@ -15,11 +17,14 @@ class Word
     #[ORM\Column]
     private ?int $id = null;
 
-    #[ORM\Column(length: 100)]
+    #[ORM\Column(length: 255)]
     private string $text = '';
 
     #[ORM\Column]
     private int $difficulty = 1;
+
+    #[ORM\Column(length: 32)]
+    private string $category = '';
 
     public function getId(): ?int
     {
@@ -46,6 +51,18 @@ class Word
     public function setDifficulty(int $difficulty): static
     {
         $this->difficulty = $difficulty;
+
+        return $this;
+    }
+
+    public function getCategory(): string
+    {
+        return $this->category;
+    }
+
+    public function setCategory(string $category): static
+    {
+        $this->category = $category;
 
         return $this;
     }

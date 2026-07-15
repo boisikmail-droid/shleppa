@@ -2,6 +2,7 @@
 
 namespace App\Service;
 
+use App\Config\CategoryConfig;
 use App\Config\DifficultyConfig;
 use App\Entity\GameSession;
 use App\Entity\GameTurn;
@@ -36,25 +37,58 @@ class GameSessionService
     ) {
     }
 
-    /** @param string[] $team1Players @param string[] $team2Players */
+    /**
+     * @param list<array{name: string, players: list<string>}> $teams
+     * @param int[]                                             $difficulties
+     * @param string[]                                          $categories
+     */
     public function createSession(
-        string $team1Name,
-        array $team1Players,
-        string $team2Name,
-        array $team2Players,
+        array $teams,
         int $totalWords,
         int $timeLimit,
+        array $difficulties,
+        array $categories,
     ): GameSession {
+        $difficulties = array_values(array_unique(array_map('intval', $difficulties)));
+        sort($difficulties);
+        if ($difficulties === []) {
+            $difficulties = DifficultyConfig::allLevelIds();
+        }
+
+        $categories = array_values(array_unique(array_map('strval', $categories)));
+        $categories = array_values(array_filter($categories, static fn (string $c) => CategoryConfig::isValid($c)));
+        if ($categories === []) {
+            $categories = CategoryConfig::allSlugs();
+        }
+
+        $cycle = DifficultyConfig::buildCycleSequence($difficulties);
+        $startDifficulty = $cycle[0] ?? $difficulties[0];
+
         $session = new GameSession();
         $session->setStatus(GameSession::STATUS_LOBBY);
         $session->setTotalWordsCount($totalWords);
         $session->setTurnTimeLimit($timeLimit);
+        $session->setSettings([
+            'difficulties' => $difficulties,
+            'categories' => $categories,
+            'cycle' => $cycle,
+        ]);
 
-        $team1 = $this->createTeam($session, $team1Name, $team1Players);
-        $team2 = $this->createTeam($session, $team2Name, $team2Players);
+        $createdTeams = [];
+        foreach ($teams as $teamData) {
+            $createdTeams[] = $this->createTeam(
+                $session,
+                (string) $teamData['name'],
+                array_map('strval', $teamData['players'] ?? [])
+            );
+        }
 
-        $wordIds = $this->selectWords($totalWords);
+        $wordIds = $this->selectWords($totalWords, $difficulties, $categories);
+        if (count($wordIds) < 20) {
+            throw new \InvalidArgumentException('Недостаточно слов в словаре для выбранных фильтров.');
+        }
         $session->setWordsData($wordIds);
+        $session->setTotalWordsCount(count($wordIds));
 
         foreach ($wordIds as $wordId) {
             $word = $this->entityManager->getReference(Word::class, $wordId);
@@ -67,21 +101,24 @@ class GameSessionService
             }
         }
 
-        foreach ([$team1, $team2] as $team) {
+        foreach ($createdTeams as $team) {
             for ($round = 1; $round <= 3; ++$round) {
                 $state = new TeamDifficultyState();
                 $state->setSession($session);
                 $state->setTeam($team);
                 $state->setRound($round);
+                $state->setCurrentDifficulty($startDifficulty);
+                $state->setWordsGuessedInCycle(0);
                 $this->entityManager->persist($state);
             }
         }
 
-        $firstPlayer = $team1->getPlayers()->first();
+        $firstTeam = $createdTeams[0];
+        $firstPlayer = $firstTeam->getPlayers()->first();
         $session->setStatus(GameSession::STATUS_ROUND1);
-        $session->setCurrentTeam($team1);
+        $session->setCurrentTeam($firstTeam);
         $session->setCurrentPlayer($firstPlayer);
-        $session->setRoundStartTeam($team1);
+        $session->setRoundStartTeam($firstTeam);
         $session->setRoundStartPlayer($firstPlayer);
 
         $this->entityManager->persist($session);
@@ -95,7 +132,7 @@ class GameSessionService
     {
         $team = new Team();
         $team->setSession($session);
-        $team->setName($name);
+        $team->setName(trim($name));
         $session->addTeam($team);
 
         foreach ($playerNames as $index => $playerName) {
@@ -112,20 +149,60 @@ class GameSessionService
         return $team;
     }
 
-    /** @return int[] */
-    private function selectWords(int $totalWords): array
+    /**
+     * @param int[]    $difficulties
+     * @param string[] $categories
+     *
+     * @return int[]
+     */
+    private function selectWords(int $totalWords, array $difficulties, array $categories): array
     {
-        $unit = intdiv($totalWords, DifficultyConfig::DISTRIBUTION_DIVISOR);
+        $weights = DifficultyConfig::gaussianWeights($difficulties);
+        $quotas = DifficultyConfig::allocateCounts($weights, $totalWords);
         $selectedIds = [];
+        $catCount = count($categories);
 
-        foreach (DifficultyConfig::POOL_WEIGHTS as $difficulty => $weight) {
-            $words = $this->wordRepository->findRandomByDifficulty($difficulty, $unit * $weight);
-            foreach ($words as $word) {
-                $selectedIds[] = $word->getId();
+        foreach ($quotas as $difficulty => $need) {
+            if ($need <= 0) {
+                continue;
+            }
+
+            $perCat = intdiv($need, $catCount);
+            $extra = $need % $catCount;
+            $got = [];
+
+            foreach ($categories as $i => $category) {
+                $take = $perCat + ($i < $extra ? 1 : 0);
+                if ($take <= 0) {
+                    continue;
+                }
+                $words = $this->wordRepository->findRandomByDifficultyAndCategories(
+                    (int) $difficulty,
+                    [$category],
+                    $take,
+                    $selectedIds
+                );
+                foreach ($words as $word) {
+                    $got[] = $word->getId();
+                    $selectedIds[] = $word->getId();
+                }
+            }
+
+            $shortfall = $need - count($got);
+            if ($shortfall > 0) {
+                $words = $this->wordRepository->findRandomByDifficultyAndCategories(
+                    (int) $difficulty,
+                    $categories,
+                    $shortfall,
+                    $selectedIds
+                );
+                foreach ($words as $word) {
+                    $selectedIds[] = $word->getId();
+                }
             }
         }
 
-        return $selectedIds;
+        return array_values(array_unique($selectedIds));
     }
 
     public function startTurn(GameSession $session, int $playerId): GameTurn
@@ -269,13 +346,35 @@ class GameSessionService
             if ($this->scoreCalculator->wasStatusChanged($log, $corrections)) {
                 $log->setWasCorrected(true);
             }
+
+            // Откат «угадали» на коррекции → слово снова в шляпе
+            $wordId = $log->getWord()->getId();
+            $correction = $corrections[$wordId] ?? null;
+            if (
+                $correction !== null
+                && $log->getStatus() === TurnLog::STATUS_GUESSED
+                && !(bool) $correction['checked']
+            ) {
+                $progress = $this->roundProgressRepository->findBySessionWordRound(
+                    $session->getId(),
+                    $wordId,
+                    $round
+                );
+                $progress?->setIsGuessedInThisRound(false);
+            }
         }
 
         $turn->setIsFinished(true);
         $this->entityManager->flush();
 
+        $unguessed = $this->roundProgressRepository->countUnguessedInRound(
+            $session->getId(),
+            $round,
+            $session->getWordsData()
+        );
+
         [$nextTeam, $nextPlayer] = $this->nextPlayerCalculator->getNextPlayer($session);
-        $roundFinished = $this->nextPlayerCalculator->isRoundComplete($session, $nextTeam, $nextPlayer);
+        $roundFinished = $this->nextPlayerCalculator->isHatEmpty($session, $unguessed);
         $gameFinished = false;
 
         if ($roundFinished && $session->getStatus() !== GameSession::STATUS_ROUND3) {
@@ -300,6 +399,7 @@ class GameSessionService
             'next_player' => ['id' => $nextPlayer?->getId(), 'name' => $nextPlayer?->getName()],
             'round_finished' => $roundFinished,
             'game_finished' => $gameFinished,
+            'remaining_words' => $roundFinished ? 0 : $unguessed,
         ];
     }
 
@@ -308,6 +408,7 @@ class GameSessionService
         $round = $session->getRoundNumber();
         $currentTeam = $session->getCurrentTeam();
         $currentPlayer = $session->getCurrentPlayer();
+        $cycle = $session->getDifficultyCycle();
 
         $difficultyState = null;
         if ($currentTeam && $round > 0) {
@@ -320,7 +421,7 @@ class GameSessionService
                 $difficultyState = [
                     'current_difficulty' => $state->getCurrentDifficulty(),
                     'words_guessed_in_cycle' => $state->getWordsGuessedInCycle(),
-                    'next_reset_at' => DifficultyConfig::cycleLength(),
+                    'next_reset_at' => count($cycle),
                 ];
             }
         }
@@ -332,6 +433,15 @@ class GameSessionService
                 'name' => $team->getName(),
                 'score' => $team->getScore(),
             ];
+        }
+
+        $remainingWords = 0;
+        if ($round > 0) {
+            $remainingWords = $this->roundProgressRepository->countUnguessedInRound(
+                $session->getId(),
+                $round,
+                $session->getWordsData()
+            );
         }
 
         return [
@@ -353,6 +463,12 @@ class GameSessionService
             'is_turn_active' => false,
             'turn_time_remaining' => null,
             'teams' => $teams,
+            'remaining_words' => $remainingWords,
+            'settings' => [
+                'difficulties' => $session->getSelectedDifficulties(),
+                'categories' => $session->getSettings()['categories'] ?? CategoryConfig::allSlugs(),
+                'max_difficulty' => DifficultyConfig::MAX_LEVEL,
+            ],
         ];
     }
 }

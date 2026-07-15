@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import LobbyView from '../views/LobbyView.vue'
+import WelcomeView from '../views/WelcomeView.vue'
+import SetupWizardView from '../views/SetupWizardView.vue'
 import GameView from '../views/GameView.vue'
 import ResultsView from '../views/ResultsView.vue'
 import api from '../services/api'
@@ -7,7 +8,9 @@ import api from '../services/api'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'lobby', component: LobbyView },
+    { path: '/', name: 'welcome', component: WelcomeView },
+    { path: '/setup', name: 'setup', component: SetupWizardView },
+    { path: '/lobby', redirect: '/setup' },
     { path: '/game/:id', name: 'game', component: GameView, props: true },
     { path: '/results/:id', name: 'results', component: ResultsView, props: true },
   ],
@@ -24,7 +27,7 @@ router.beforeEach(async (to, from, next) => {
       }
       next()
     } catch {
-      next({ name: 'lobby' })
+      next({ name: 'welcome' })
     }
     return
   }

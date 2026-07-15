@@ -100,13 +100,17 @@ class TeamDifficultyState
 
     public function applyGuessDifficultyUpdate(): void
     {
+        $cycle = $this->session->getDifficultyCycle();
+        $len = max(1, count($cycle));
+
         $this->wordsGuessedInCycle++;
 
-        if ($this->wordsGuessedInCycle >= DifficultyConfig::CYCLE_LENGTH) {
+        if ($this->wordsGuessedInCycle >= $len) {
             $this->wordsGuessedInCycle = 0;
         }
 
         $this->currentDifficulty = DifficultyConfig::difficultyForCycleIndex(
+            $cycle,
             $this->wordsGuessedInCycle
         );
     }

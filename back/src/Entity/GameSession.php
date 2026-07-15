@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Config\DifficultyConfig;
 use App\Repository\GameSessionRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -53,6 +54,14 @@ class GameSession
     #[ORM\Column(type: Types::JSON)]
     private array $wordsData = [];
 
+    /**
+     * Выбранные сложности, категории и цикл хода.
+     *
+     * @var array{difficulties?: int[], categories?: string[], cycle?: int[]}
+     */
+    #[ORM\Column(type: Types::JSON)]
+    private array $settings = [];
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -65,6 +74,8 @@ class GameSession
     {
         $this->createdAt = new \DateTimeImmutable();
         $this->teams = new ArrayCollection();
+        $this->settings = [];
+        $this->wordsData = [];
     }
 
     public function getId(): ?int
@@ -168,6 +179,45 @@ class GameSession
         $this->wordsData = $wordsData;
 
         return $this;
+    }
+
+    /**
+     * @return array{difficulties?: int[], categories?: string[], cycle?: int[]}
+     */
+    public function getSettings(): array
+    {
+        return $this->settings;
+    }
+
+    /**
+     * @param array{difficulties?: int[], categories?: string[], cycle?: int[]} $settings
+     */
+    public function setSettings(array $settings): static
+    {
+        $this->settings = $settings;
+
+        return $this;
+    }
+
+    /** @return int[] */
+    public function getSelectedDifficulties(): array
+    {
+        $diffs = $this->settings['difficulties'] ?? DifficultyConfig::allLevelIds();
+        $diffs = array_values(array_unique(array_map('intval', $diffs)));
+        sort($diffs);
+
+        return $diffs !== [] ? $diffs : DifficultyConfig::allLevelIds();
+    }
+
+    /** @return int[] */
+    public function getDifficultyCycle(): array
+    {
+        $cycle = $this->settings['cycle'] ?? [];
+        if ($cycle === []) {
+            return DifficultyConfig::buildCycleSequence($this->getSelectedDifficulties());
+        }
+
+        return array_values(array_map('intval', $cycle));
     }
 
     public function getCreatedAt(): \DateTimeImmutable

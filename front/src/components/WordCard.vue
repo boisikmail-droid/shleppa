@@ -1,6 +1,6 @@
 <template>
   <div class="word-card" :style="cardStyle">
-    <div class="word-card__level">Уровень {{ difficulty }}</div>
+    <div class="word-card__level">{{ levelTitle }}</div>
     <h1>{{ text }}</h1>
     <DifficultyStars class="word-card__stars" :level="difficulty" />
   </div>
@@ -9,6 +9,7 @@
 <script setup>
 import { computed } from 'vue'
 import DifficultyStars from './DifficultyStars.vue'
+import { difficultyLabel } from '../constants/difficulty'
 
 const props = defineProps({
   text: { type: String, required: true },
@@ -22,10 +23,10 @@ const colorMap = {
   4: '#c4643a',
   5: '#b84a6f',
   6: '#9b1c31',
-  7: '#6b1428',
 }
 
 const color = computed(() => colorMap[props.difficulty] || colorMap[1])
+const levelTitle = computed(() => difficultyLabel(props.difficulty))
 
 const cardStyle = computed(() => ({
   color: color.value,

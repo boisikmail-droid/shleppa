@@ -38,14 +38,15 @@ class TeamDifficultyStateRepository extends ServiceEntityRepository
             ->getOneOrNullResult();
     }
 
-    public function resetForNewRound(int $sessionId, int $round): void
+    public function resetForNewRound(int $sessionId, int $round, int $startDifficulty = 1): void
     {
         $this->createQueryBuilder('tds')
             ->update()
-            ->set('tds.currentDifficulty', 1)
+            ->set('tds.currentDifficulty', ':diff')
             ->set('tds.wordsGuessedInCycle', 0)
             ->where('tds.session = :sessionId')
             ->andWhere('tds.round = :round')
+            ->setParameter('diff', $startDifficulty)
             ->setParameter('sessionId', $sessionId)
             ->setParameter('round', $round)
             ->getQuery()
