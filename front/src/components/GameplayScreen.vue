@@ -39,6 +39,15 @@
       {{ timeUp ? 'Общее слово — могут угадывать все' : roundTitle.text }}
     </p>
 
+    <div class="gameplay-hat-wrap">
+      <TeamHat
+        :hat-id="gameStore.currentTeam?.hat_id || 'tophat'"
+        size="lg"
+      />
+      <p class="gameplay-hat-caption">{{ gameStore.currentTeam?.name }}</p>
+      <p class="gameplay-hat-player">{{ gameStore.currentPlayer?.name }}</p>
+    </div>
+
     <div class="gameplay-timer-row">
       <p v-if="timeUp" class="time-up-label">Время вышло</p>
       <Timer
@@ -150,6 +159,7 @@ import { useGameStore } from '../stores/gameStore'
 import { getRoundTitle } from '../composables/useRoundTitle'
 import Timer from './Timer.vue'
 import WordCard from './WordCard.vue'
+import TeamHat from './TeamHat.vue'
 import { playGuess, playSkip } from '../services/timerSounds'
 
 const emit = defineEmits(['guess', 'skip', 'timeout'])
@@ -358,6 +368,33 @@ async function missLastWord() {
   margin: 0 0 8px;
 }
 
+.gameplay-hat-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.gameplay-hat-caption {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.gameplay-hat-player {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.35rem, 4.5vw, 1.85rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
 .gameplay--timeup .gameplay-subtitle {
   color: var(--crimson-bright);
 }
@@ -406,8 +443,8 @@ async function missLastWord() {
   gap: 12px;
   padding: 24px;
   background:
-    radial-gradient(ellipse at 50% 40%, rgba(201, 162, 39, 0.12), transparent 55%),
-    rgba(7, 6, 8, 0.92);
+    radial-gradient(ellipse at 50% 40%, var(--round-glow), transparent 55%),
+    var(--overlay-scrim);
   backdrop-filter: blur(6px);
 }
 

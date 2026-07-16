@@ -85,6 +85,7 @@ class ApiController extends AbstractController
                     static fn ($p) => trim((string) $p),
                     $team['players'] ?? []
                 )),
+                'hat_id' => isset($team['hat_id']) ? (string) $team['hat_id'] : 'tophat',
             ];
         }
 

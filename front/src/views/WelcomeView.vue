@@ -23,38 +23,38 @@
       <div class="welcome__hat-wrap">
         <div class="welcome__hat-glow" />
         <svg class="welcome__hat" viewBox="0 0 360 280" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <ellipse class="welcome__hat-shadow" cx="180" cy="248" rx="148" ry="20" fill="#000" />
+          <ellipse class="welcome__hat-shadow" cx="180" cy="248" rx="148" ry="20" fill="currentColor" opacity="0.55" />
           <path
             d="M36 204c22-32 74-48 144-48s122 16 144 48c-30 24-84 36-144 36S66 228 36 204Z"
-            fill="#16100e"
-            stroke="#c9a227"
+            fill="var(--hat-body)"
+            stroke="var(--hat-stroke)"
             stroke-width="1.6"
           />
           <path
             d="M48 198c18-20 62-32 132-32s114 12 132 32"
-            stroke="#e8c547"
+            stroke="var(--hat-stroke-bright)"
             stroke-width="1"
             opacity="0.22"
           />
           <path
             d="M112 200V88c0-20 30-36 68-36s68 16 68 36v112"
-            fill="#100c0a"
-            stroke="#c9a227"
+            fill="var(--hat-crown)"
+            stroke="var(--hat-stroke)"
             stroke-width="1.6"
           />
           <path
             d="M122 96c8-10 28-18 58-18s50 8 58 18"
-            stroke="#e8c547"
+            stroke="var(--hat-stroke-bright)"
             stroke-width="1"
             opacity="0.18"
           />
-          <path d="M112 148h136" stroke="#8f1d2c" stroke-width="16" />
-          <path d="M112 140h136M112 156h136" stroke="#c9a227" stroke-width="1.1" opacity="0.65" />
-          <ellipse cx="180" cy="54" rx="70" ry="15" fill="#090706" stroke="#c9a227" stroke-width="1.3" />
-          <ellipse cx="180" cy="50" rx="52" ry="8" fill="#1a1410" opacity="0.7" />
+          <path d="M112 148h136" stroke="var(--hat-band)" stroke-width="16" />
+          <path d="M112 140h136M112 156h136" stroke="var(--hat-stroke)" stroke-width="1.1" opacity="0.65" />
+          <ellipse cx="180" cy="54" rx="70" ry="15" fill="var(--hat-top)" stroke="var(--hat-stroke)" stroke-width="1.3" />
+          <ellipse cx="180" cy="50" rx="52" ry="8" fill="var(--hat-inner)" opacity="0.7" />
           <path
             d="M158 148c6 5 14 8 22 8s16-3 22-8"
-            stroke="#e8c547"
+            stroke="var(--hat-stroke-bright)"
             stroke-width="1.4"
             opacity="0.4"
           />
@@ -132,10 +132,7 @@ function emberStyle(n) {
   overflow: hidden;
   display: grid;
   place-items: stretch;
-  background:
-    radial-gradient(120% 80% at 50% 110%, rgba(143, 29, 44, 0.38) 0%, transparent 52%),
-    radial-gradient(90% 55% at 50% -5%, rgba(201, 162, 39, 0.16) 0%, transparent 48%),
-    linear-gradient(180deg, #050407 0%, #0b090c 42%, #160c12 100%);
+  background: var(--welcome-bg);
 }
 
 .welcome__stage {
@@ -158,7 +155,7 @@ function emberStyle(n) {
   width: min(95vw, 560px);
   height: 48vh;
   transform: translateX(-50%);
-  background: radial-gradient(ellipse at 50% 35%, rgba(232, 197, 71, 0.22), transparent 68%);
+  background: radial-gradient(ellipse at 50% 35%, var(--welcome-spot), transparent 68%);
   animation: spotBreathe 5.5s ease-in-out infinite alternate;
 }
 
@@ -173,11 +170,11 @@ function emberStyle(n) {
     conic-gradient(
       from 210deg at 50% 100%,
       transparent 0deg,
-      rgba(232, 197, 71, 0.05) 18deg,
+      color-mix(in srgb, var(--gold-bright) 12%, transparent) 18deg,
       transparent 36deg,
-      rgba(232, 197, 71, 0.07) 54deg,
+      color-mix(in srgb, var(--gold-bright) 16%, transparent) 54deg,
       transparent 72deg,
-      rgba(201, 162, 39, 0.04) 95deg,
+      color-mix(in srgb, var(--gold) 10%, transparent) 95deg,
       transparent 120deg
     );
   mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent 85%);
@@ -219,8 +216,8 @@ function emberStyle(n) {
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: #e8c547;
-  box-shadow: 0 0 8px rgba(232, 197, 71, 0.8);
+  background: var(--welcome-ember);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--welcome-ember) 80%, transparent);
   animation: emberRise var(--dur) ease-in var(--delay) infinite;
   opacity: 0;
 }
@@ -241,19 +238,19 @@ function emberStyle(n) {
   font-size: clamp(0.9rem, 2.6vw, 1.2rem);
   font-style: italic;
   line-height: 1.2;
-  color: rgba(246, 232, 180, 0.88);
+  color: var(--welcome-word-text);
   letter-spacing: 0.02em;
   white-space: normal;
   text-align: center;
-  background: linear-gradient(180deg, rgba(40, 28, 18, 0.55), rgba(18, 12, 10, 0.35));
-  border: 1px solid rgba(201, 162, 39, 0.28);
-  border-radius: 2px;
+  background: var(--welcome-word-bg);
+  border: 1px solid var(--welcome-word-border);
+  border-radius: var(--radius);
   box-shadow:
-    0 8px 20px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(232, 197, 71, 0.12);
+    var(--shadow),
+    inset 0 1px 0 color-mix(in srgb, var(--gold-bright) 18%, transparent);
   transform: rotate(var(--rot)) scale(var(--scale));
   animation: wordFall var(--dur) cubic-bezier(0.25, 0.1, 0.25, 1) var(--delay) infinite;
-  text-shadow: 0 0 18px rgba(201, 162, 39, 0.25);
+  text-shadow: 0 0 18px var(--title-glow);
 }
 
 .welcome__word--long {
@@ -277,7 +274,7 @@ function emberStyle(n) {
   width: 70%;
   height: 40%;
   transform: translate(-50%, -50%);
-  background: radial-gradient(ellipse, rgba(201, 162, 39, 0.22), transparent 70%);
+  background: radial-gradient(ellipse, color-mix(in srgb, var(--gold) 35%, transparent), transparent 70%);
   filter: blur(8px);
   animation: hatSuck 2.4s ease-in-out infinite alternate;
 }
@@ -287,7 +284,8 @@ function emberStyle(n) {
   display: block;
   width: 100%;
   height: auto;
-  filter: drop-shadow(0 28px 42px rgba(0, 0, 0, 0.6));
+  color: var(--bg-deep);
+  filter: drop-shadow(0 28px 42px color-mix(in srgb, var(--bg-deep) 55%, transparent));
 }
 
 .welcome__hat-shadow {
@@ -317,8 +315,8 @@ function emberStyle(n) {
   letter-spacing: 0.04em;
   color: var(--gold-bright);
   text-shadow:
-    0 0 56px rgba(201, 162, 39, 0.4),
-    0 2px 0 rgba(0, 0, 0, 0.45);
+    0 0 56px var(--title-glow),
+    0 2px 0 color-mix(in srgb, var(--bg-deep) 45%, transparent);
   animation: brandIn 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -352,13 +350,13 @@ function emberStyle(n) {
   margin-top: 0.35rem;
   padding: 15px 22px;
   text-decoration: none;
-  color: var(--bg-deep);
-  background: linear-gradient(120deg, #f0d56a 0%, var(--gold) 55%, #b8891a 100%);
+  color: var(--btn-primary-text);
+  background: linear-gradient(120deg, var(--btn-primary-from) 0%, var(--btn-primary-mid) 55%, var(--btn-primary-to) 100%);
   background-size: 160% 100%;
   border-radius: var(--radius);
   box-shadow:
-    0 0 0 1px rgba(232, 197, 71, 0.35),
-    0 10px 28px rgba(201, 162, 39, 0.22);
+    0 0 0 1px color-mix(in srgb, var(--gold-bright) 35%, transparent),
+    0 10px 28px var(--btn-primary-glow);
   animation:
     brandIn 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.26s both,
     ctaShimmer 4.5s ease-in-out infinite;
@@ -380,8 +378,8 @@ function emberStyle(n) {
 .welcome__cta:hover {
   transform: translateY(-2px);
   box-shadow:
-    0 0 0 1px rgba(232, 197, 71, 0.5),
-    0 14px 36px rgba(201, 162, 39, 0.32);
+    0 0 0 1px color-mix(in srgb, var(--gold-bright) 55%, transparent),
+    0 14px 36px var(--btn-primary-glow);
 }
 
 .welcome__cta:hover .welcome__cta-arrow {

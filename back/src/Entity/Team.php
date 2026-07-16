@@ -26,6 +26,9 @@ class Team
     #[ORM\Column]
     private int $score = 0;
 
+    #[ORM\Column(length: 32)]
+    private string $hatId = 'tophat';
+
     /** @var Collection<int, Player> */
     #[ORM\OneToMany(mappedBy: 'team', targetEntity: Player::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
     #[ORM\OrderBy(['orderIndex' => 'ASC'])]
@@ -73,6 +76,18 @@ class Team
     public function setScore(int $score): static
     {
         $this->score = $score;
+
+        return $this;
+    }
+
+    public function getHatId(): string
+    {
+        return $this->hatId;
+    }
+
+    public function setHatId(string $hatId): static
+    {
+        $this->hatId = $hatId;
 
         return $this;
     }

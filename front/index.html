@@ -7,9 +7,20 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Oswald:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Oswald:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Syne:wght@600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700&family=Literata:opsz,wght@7..72,600;7..72,700&family=Source+Sans+3:wght@400;500;600;700&family=Spectral:wght@600;700&family=Figtree:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
+    <script>
+      (function () {
+        var allowed = { noir: 1, neon: 1, daylight: 1, fog: 1, grove: 1 }
+        try {
+          var t = localStorage.getItem('hat-theme')
+          document.documentElement.setAttribute('data-theme', allowed[t] ? t : 'noir')
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'noir')
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

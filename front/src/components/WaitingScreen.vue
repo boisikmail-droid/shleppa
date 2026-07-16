@@ -6,8 +6,21 @@
     </header>
 
     <div class="card card--highlight">
-      <p><strong>Команда</strong> {{ gameStore.currentTeam?.name }}</p>
-      <p><strong>Игрок</strong> {{ gameStore.currentPlayer?.name }}</p>
+      <div class="waiting__focus">
+        <TeamHat
+          class="waiting__hat"
+          :hat-id="gameStore.currentTeam?.hat_id || 'tophat'"
+          size="lg"
+        />
+        <p class="waiting__focus-row">
+          <span class="waiting__focus-label">Команда</span>
+          <span class="waiting__focus-name">{{ gameStore.currentTeam?.name }}</span>
+        </p>
+        <p class="waiting__focus-row">
+          <span class="waiting__focus-label">Игрок</span>
+          <span class="waiting__focus-name waiting__focus-name--player">{{ gameStore.currentPlayer?.name }}</span>
+        </p>
+      </div>
 
       <div class="stat-row">
         <span class="stat-row__label">В шляпе осталось</span>
@@ -32,7 +45,10 @@
       <h3>Счёт</h3>
       <ul class="score-list">
         <li v-for="t in gameStore.teams" :key="t.id">
-          <span>{{ t.name }}</span>
+          <span class="score-list__team">
+            <TeamHat :hat-id="t.hat_id || 'tophat'" size="sm" />
+            <span>{{ t.name }}</span>
+          </span>
           <strong>{{ t.score }}</strong>
         </li>
       </ul>
@@ -58,6 +74,7 @@ import { useGameStore } from '../stores/gameStore'
 import { getRoundTitle } from '../composables/useRoundTitle'
 import { MAX_DIFFICULTY, difficultyLabel } from '../constants/difficulty'
 import DifficultyStars from './DifficultyStars.vue'
+import TeamHat from './TeamHat.vue'
 import { initAudioOnGesture, playTurnStart } from '../services/timerSounds'
 
 const gameStore = useGameStore()
@@ -97,7 +114,7 @@ async function onReady() {
   font-size: 3rem;
   display: block;
   margin-bottom: 8px;
-  filter: drop-shadow(0 0 16px rgba(201, 162, 39, 0.35));
+  filter: drop-shadow(0 0 16px var(--title-glow));
 }
 
 .waiting__title {
@@ -114,13 +131,58 @@ async function onReady() {
   box-shadow: var(--shadow-gold), var(--shadow);
 }
 
+.waiting__focus {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 4px;
+  text-align: center;
+}
+
+.waiting__hat {
+  margin-bottom: 4px;
+}
+
+.waiting__focus-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  width: 100%;
+}
+
+.waiting__focus-label {
+  font-family: var(--font-heading);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.waiting__focus-name {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 5vw, 2.1rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: 0.03em;
+  color: var(--gold-bright);
+  text-shadow: 0 0 24px var(--title-glow);
+}
+
+.waiting__focus-name--player {
+  color: var(--text);
+  text-shadow: none;
+}
+
 .stat-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin: 14px 0 4px;
   padding-top: 12px;
-  border-top: 1px solid rgba(201, 162, 39, 0.1);
+  border-top: 1px solid var(--hairline);
 }
 
 .stat-row__label {
@@ -161,9 +223,17 @@ async function onReady() {
 .score-list li {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--table-line);
   font-size: 0.95rem;
+}
+
+.score-list__team {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
 .score-list li:last-child {

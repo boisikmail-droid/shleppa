@@ -3,12 +3,17 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import { useVkStore } from './stores/vkStore'
+import { useThemeStore } from './stores/themeStore'
+import './assets/themes.css'
 import './assets/main.css'
 
 const app = createApp(App)
 const pinia = createPinia()
 app.use(pinia)
 app.use(router)
+
+const themeStore = useThemeStore(pinia)
+themeStore.init()
 
 const vkStore = useVkStore(pinia)
 

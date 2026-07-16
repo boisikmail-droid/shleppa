@@ -40,7 +40,28 @@
       <div v-for="(team, ti) in teams" :key="ti" class="setup__team">
         <h3 class="section-title">Команда {{ ti + 1 }}</h3>
         <label>Название</label>
-        <input v-model="team.name" type="text" :placeholder="defaultTeamName(ti)" maxlength="100" />
+        <div class="player-row setup__name-row">
+          <input v-model="team.name" type="text" placeholder="Название команды" maxlength="100" />
+          <button type="button" title="Случайное название" @click="rerollName(ti)">
+            🎲
+          </button>
+        </div>
+
+        <label>Шляпа команды</label>
+        <div class="setup__hat-current">
+          <img :src="getHat(team.hatId).src" :alt="getHat(team.hatId).label" class="setup__hat-preview" />
+          <div class="setup__hat-meta">
+            <span class="setup__hat-label">{{ getHat(team.hatId).label }}</span>
+            <div class="setup__hat-actions">
+              <button type="button" class="button-secondary setup__hat-btn" @click="rerollHat(ti)">
+                Случайная
+              </button>
+              <button type="button" class="button-secondary setup__hat-btn" @click="openHatPicker(ti)">
+                Выбрать…
+              </button>
+            </div>
+          </div>
+        </div>
 
         <label>Игроки</label>
         <div v-for="(player, pi) in team.players" :key="pi" class="player-row">
@@ -135,6 +156,35 @@
         </button>
       </div>
     </section>
+
+    <div
+      v-if="hatPickerTeam !== null"
+      class="hat-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Выбор шляпы"
+      @click.self="closeHatPicker"
+    >
+      <div class="hat-modal__sheet">
+        <div class="hat-modal__head">
+          <h3 class="hat-modal__title">Выберите шляпу</h3>
+          <button type="button" class="hat-modal__close" @click="closeHatPicker">✕</button>
+        </div>
+        <div class="hat-modal__grid">
+          <button
+            v-for="hat in HATS"
+            :key="hat.id"
+            type="button"
+            class="hat-modal__opt"
+            :class="{ 'hat-modal__opt--on': teams[hatPickerTeam]?.hatId === hat.id }"
+            @click="chooseHatFromPicker(hat.id)"
+          >
+            <img :src="hat.src" :alt="hat.label" />
+            <span>{{ hat.label }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -150,6 +200,8 @@ import {
   setSoundEnabled,
 } from '../services/timerSounds'
 import { DIFFICULTY_LEVELS, CATEGORIES } from '../constants/difficulty'
+import { pickTeamNames, pickOneTeamName } from '../constants/teamNames'
+import { HATS, pickHatIds, pickOneHatId, getHat } from '../constants/hats'
 
 const router = useRouter()
 const sessionStore = useSessionStore()
@@ -171,29 +223,73 @@ const selectedCategories = ref(CATEGORIES.map((c) => c.id))
 const soundOn = ref(isSoundEnabled())
 const loading = ref(false)
 const error = ref('')
+const hatPickerTeam = ref(null)
 
-function defaultTeamName(i) {
-  return ['Красные', 'Синие', 'Зелёные', 'Жёлтые'][i] || `Команда ${i + 1}`
-}
-
-function makeTeams(n) {
+function makeTeams(n, excludeNames = [], excludeHats = []) {
+  const names = pickTeamNames(n, excludeNames)
+  const hats = pickHatIds(n, excludeHats)
   return Array.from({ length: n }, (_, i) => ({
-    name: defaultTeamName(i),
+    name: names[i],
+    hatId: hats[i],
     players: [''],
   }))
 }
 
-function setTeamCount(n) {
-  const prev = teams.value
-  const next = makeTeams(n)
-  for (let i = 0; i < Math.min(prev.length, n); i++) {
-    next[i] = {
-      name: prev[i].name || defaultTeamName(i),
-      players: [...prev[i].players],
+function rerollName(ti) {
+  const exclude = teams.value.map((t, i) => (i === ti ? '' : t.name))
+  teams.value[ti].name = pickOneTeamName(exclude)
+}
+
+function rerollHat(ti) {
+  const exclude = teams.value.map((t, i) => (i === ti ? '' : t.hatId))
+  teams.value[ti].hatId = pickOneHatId(exclude)
+}
+
+function openHatPicker(ti) {
+  hatPickerTeam.value = ti
+}
+
+function closeHatPicker() {
+  hatPickerTeam.value = null
+}
+
+function chooseHatFromPicker(hatId) {
+  if (hatPickerTeam.value === null) return
+  setTeamHat(hatPickerTeam.value, hatId)
+  closeHatPicker()
+}
+
+function setTeamHat(ti, hatId) {
+  const taken = teams.value.some((t, i) => i !== ti && t.hatId === hatId)
+  if (taken) {
+    const other = teams.value.findIndex((t, i) => i !== ti && t.hatId === hatId)
+    if (other >= 0) {
+      teams.value[other].hatId = teams.value[ti].hatId
     }
   }
+  teams.value[ti].hatId = hatId
+}
+
+function setTeamCount(n) {
+  const prev = teams.value
+  const kept = []
+  for (let i = 0; i < Math.min(prev.length, n); i++) {
+    kept.push({
+      name: prev[i].name,
+      hatId: prev[i].hatId || pickOneHatId(kept.map((t) => t.hatId)),
+      players: [...prev[i].players],
+    })
+  }
+  if (kept.length < n) {
+    const extra = makeTeams(
+      n - kept.length,
+      kept.map((t) => t.name),
+      kept.map((t) => t.hatId)
+    )
+    kept.push(...extra)
+  }
   teamCount.value = n
-  teams.value = next
+  teams.value = kept
 }
 
 function addPlayer(ti) {
@@ -250,6 +346,7 @@ async function startGame() {
       teams: teams.value.map((t) => ({
         name: t.name.trim(),
         players: t.players.map((p) => p.trim()).filter(Boolean),
+        hat_id: t.hatId || 'tophat',
       })),
       total_words: totalWords.value,
       time_limit: timeLimit.value,
@@ -324,7 +421,7 @@ onMounted(async () => {
 }
 
 .setup__step--done {
-  background: rgba(201, 162, 39, 0.2);
+  background: var(--hint-bg);
   border-color: var(--gold-dim);
   color: var(--gold);
 }
@@ -360,12 +457,164 @@ onMounted(async () => {
 .setup__chip--on {
   border-color: var(--gold);
   color: var(--gold-bright);
-  background: rgba(201, 162, 39, 0.12);
+  background: var(--hint-bg);
 }
 
 .setup__team {
   padding: 12px 0 4px;
   border-top: 1px solid var(--border);
+}
+
+.setup__hat-current {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.setup__hat-preview {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  flex-shrink: 0;
+}
+
+.setup__hat-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.setup__hat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.setup__hat-btn {
+  width: auto;
+  margin-top: 0;
+  padding: 8px 12px;
+  font-size: 0.72rem;
+}
+
+.setup__hat-label {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.hat-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-deep);
+}
+
+.hat-modal__sheet {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding:
+    max(12px, env(safe-area-inset-top))
+    14px
+    max(14px, env(safe-area-inset-bottom));
+  background: var(--bg-main);
+}
+
+.hat-modal__head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hat-modal__title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.hat-modal__close {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  font-size: 1.1rem;
+}
+
+.hat-modal__grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 12px 2px 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hat-modal__opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 6px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.hat-modal__opt img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: calc(var(--radius) - 2px);
+  display: block;
+}
+
+.hat-modal__opt span {
+  font-family: var(--font-heading);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.hat-modal__opt--on {
+  border-color: var(--gold);
+  box-shadow: var(--shadow-gold);
+  color: var(--gold-bright);
 }
 
 .setup__hint {
@@ -379,7 +628,7 @@ onMounted(async () => {
   gap: 10px;
   align-items: flex-start;
   padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--table-line);
   cursor: pointer;
   font-size: 0.95rem;
 }

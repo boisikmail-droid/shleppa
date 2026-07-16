@@ -63,6 +63,6 @@ function newGame() {
   text-align: center;
   font-size: 3rem;
   margin-bottom: 8px;
-  filter: drop-shadow(0 0 20px rgba(201, 162, 39, 0.4));
+  filter: drop-shadow(0 0 20px var(--title-glow));
 }
 </style>

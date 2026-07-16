@@ -38,9 +38,9 @@ class GameSessionService
     }
 
     /**
-     * @param list<array{name: string, players: list<string>}> $teams
-     * @param int[]                                             $difficulties
-     * @param string[]                                          $categories
+     * @param list<array{name: string, players: list<string>, hat_id?: string}> $teams
+     * @param int[]                                                              $difficulties
+     * @param string[]                                                           $categories
      */
     public function createSession(
         array $teams,
@@ -79,7 +79,8 @@ class GameSessionService
             $createdTeams[] = $this->createTeam(
                 $session,
                 (string) $teamData['name'],
-                array_map('strval', $teamData['players'] ?? [])
+                array_map('strval', $teamData['players'] ?? []),
+                isset($teamData['hat_id']) ? (string) $teamData['hat_id'] : 'tophat',
             );
         }
 
@@ -128,11 +129,12 @@ class GameSessionService
     }
 
     /** @param string[] $playerNames */
-    private function createTeam(GameSession $session, string $name, array $playerNames): Team
+    private function createTeam(GameSession $session, string $name, array $playerNames, string $hatId = 'tophat'): Team
     {
         $team = new Team();
         $team->setSession($session);
         $team->setName(trim($name));
+        $team->setHatId($hatId !== '' ? $hatId : 'tophat');
         $session->addTeam($team);
 
         foreach ($playerNames as $index => $playerName) {
@@ -508,6 +510,7 @@ class GameSessionService
                 'id' => $team->getId(),
                 'name' => $team->getName(),
                 'score' => $team->getScore(),
+                'hat_id' => $team->getHatId(),
             ];
         }
 
@@ -528,6 +531,7 @@ class GameSessionService
                 'id' => $currentTeam->getId(),
                 'name' => $currentTeam->getName(),
                 'score' => $currentTeam->getScore(),
+                'hat_id' => $currentTeam->getHatId(),
             ] : null,
             'current_player' => $currentPlayer ? [
                 'id' => $currentPlayer->getId(),
