@@ -48,6 +48,8 @@ class GameSessionService
         int $timeLimit,
         array $difficulties,
         array $categories,
+        int $skipPenalty = 2,
+        bool $lastWordCommon = true,
     ): GameSession {
         $difficulties = array_values(array_unique(array_map('intval', $difficulties)));
         sort($difficulties);
@@ -72,6 +74,8 @@ class GameSessionService
             'difficulties' => $difficulties,
             'categories' => $categories,
             'cycle' => $cycle,
+            'skip_penalty' => max(0, $skipPenalty),
+            'last_word_common' => $lastWordCommon,
         ]);
 
         $createdTeams = [];
@@ -400,7 +404,8 @@ class GameSessionService
 
         $team = $turn->getTeam();
         $round = $session->getRoundNumber();
-        $scoreChange = $this->scoreCalculator->calculateScoreChange($logs, $corrections);
+        $skipPenalty = (int) ($session->getSettings()['skip_penalty'] ?? 2);
+        $scoreChange = $this->scoreCalculator->calculateScoreChange($logs, $corrections, $skipPenalty);
         $team->setScore($team->getScore() + $scoreChange);
 
         $state = $this->teamDifficultyStateRepository->findBySessionTeamRound(
@@ -548,7 +553,102 @@ class GameSessionService
                 'difficulties' => $session->getSelectedDifficulties(),
                 'categories' => $session->getSettings()['categories'] ?? CategoryConfig::allSlugs(),
                 'max_difficulty' => DifficultyConfig::MAX_LEVEL,
+                'skip_penalty' => (int) ($session->getSettings()['skip_penalty'] ?? 2),
+                'last_word_common' => (bool) ($session->getSettings()['last_word_common'] ?? true),
             ],
+        ];
+    }
+
+    /**
+     * Post-game summary from TurnLogs (after corrections via wasCorrected).
+     *
+     * @return array{
+     *   session_id: int|null,
+     *   teams: list<array{id: int|null, name: string, score: int, hat_id: string}>,
+     *   players: list<array{id: int|null, name: string, team_id: int|null, team_name: string, guessed: int, skipped: int, net: int}>,
+     *   rounds: list<array{round: int, guessed: int, skipped: int}>,
+     *   highlights: list<array{word: string, team: string, player: string, round: int, outcome: string}>
+     * }
+     */
+    public function getRecap(GameSession $session): array
+    {
+        $logs = $this->turnLogRepository->findAllForSession((int) $session->getId());
+        $skipPenalty = (int) ($session->getSettings()['skip_penalty'] ?? 2);
+
+        $teamsOut = [];
+        foreach ($session->getTeams() as $team) {
+            $teamsOut[] = [
+                'id' => $team->getId(),
+                'name' => $team->getName(),
+                'score' => $team->getScore(),
+                'hat_id' => $team->getHatId(),
+            ];
+        }
+
+        /** @var array<int, array{id: int|null, name: string, team_id: int|null, team_name: string, guessed: int, skipped: int, net: int}> */
+        $players = [];
+        /** @var array<int, array{round: int, guessed: int, skipped: int}> */
+        $rounds = [];
+        $highlights = [];
+
+        foreach ($logs as $log) {
+            $round = $log->getRound();
+            if (!isset($rounds[$round])) {
+                $rounds[$round] = ['round' => $round, 'guessed' => 0, 'skipped' => 0];
+            }
+
+            $player = $log->getPlayer();
+            $team = $log->getTeam();
+            $pid = (int) $player->getId();
+            if (!isset($players[$pid])) {
+                $players[$pid] = [
+                    'id' => $player->getId(),
+                    'name' => $player->getName(),
+                    'team_id' => $team->getId(),
+                    'team_name' => $team->getName(),
+                    'guessed' => 0,
+                    'skipped' => 0,
+                    'net' => 0,
+                ];
+            }
+
+            $status = $log->getStatus();
+            $corrected = $log->wasCorrected();
+
+            // Effective outcome after correction screen
+            $effectiveGuess = ($status === TurnLog::STATUS_GUESSED && !$corrected)
+                || ($status === TurnLog::STATUS_SKIPPED && $corrected);
+            $effectiveSkip = ($status === TurnLog::STATUS_SKIPPED && !$corrected);
+
+            if ($effectiveGuess) {
+                ++$players[$pid]['guessed'];
+                ++$rounds[$round]['guessed'];
+                $players[$pid]['net'] += 1;
+                if (count($highlights) < 12) {
+                    $highlights[] = [
+                        'word' => $log->getWord()->getText(),
+                        'team' => $team->getName(),
+                        'player' => $player->getName(),
+                        'round' => $round,
+                        'outcome' => 'guessed',
+                    ];
+                }
+            } elseif ($effectiveSkip) {
+                ++$players[$pid]['skipped'];
+                ++$rounds[$round]['skipped'];
+                $players[$pid]['net'] -= $skipPenalty;
+            }
+        }
+
+        usort($players, static fn ($a, $b) => $b['guessed'] <=> $a['guessed'] ?: $b['net'] <=> $a['net']);
+        ksort($rounds);
+
+        return [
+            'session_id' => $session->getId(),
+            'teams' => $teamsOut,
+            'players' => array_values($players),
+            'rounds' => array_values($rounds),
+            'highlights' => $highlights,
         ];
     }
 }

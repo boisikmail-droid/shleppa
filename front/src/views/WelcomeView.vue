@@ -94,10 +94,10 @@ const phrases = [
   'седьмая печать',
 ]
 
-function wordStyle(i, total) {
+function wordStyle(i) {
   const x = 6 + ((i * 17) % 78)
   const delay = (i * 0.85) % 9
-  const dur = 8.5 + (i % 5) * 0.7
+  const dur = 9 + (i % 5) * 0.8
   const rot = -14 + (i * 7) % 28
   const sway = 10 + (i % 4) * 6
   return {
@@ -112,7 +112,7 @@ function wordStyle(i, total) {
 
 const fallingWords = phrases.map((text, i) => ({
   text,
-  style: wordStyle(i, phrases.length),
+  style: wordStyle(i),
 }))
 
 function emberStyle(n) {
@@ -224,7 +224,7 @@ function emberStyle(n) {
 
 .welcome__words {
   position: absolute;
-  inset: 0 0 28% 0;
+  inset: 0;
   overflow: hidden;
 }
 
@@ -407,16 +407,16 @@ function emberStyle(n) {
     opacity: 0.95;
     filter: blur(0);
   }
-  55% {
-    transform: translate3d(var(--sway), 42vh, 0) rotate(calc(var(--rot) + 6deg)) scale(var(--scale));
+  50% {
+    transform: translate3d(var(--sway), 50vh, 0) rotate(calc(var(--rot) + 4deg)) scale(var(--scale));
     opacity: 0.85;
   }
-  82% {
-    opacity: 0.45;
+  85% {
+    opacity: 0.4;
     filter: blur(0.5px);
   }
   100% {
-    transform: translate3d(calc(var(--sway) * -0.4), 72vh, 0) rotate(calc(var(--rot) + 18deg)) scale(0.55);
+    transform: translate3d(calc(var(--sway) * -0.3), 110vh, 0) rotate(calc(var(--rot) + 12deg)) scale(0.5);
     opacity: 0;
     filter: blur(3px);
   }
@@ -530,13 +530,64 @@ function emberStyle(n) {
 
 @media (max-width: 480px) {
   .welcome__copy {
-    padding-top: 3.2rem;
-    padding-bottom: 46vh;
+    padding: max(2.6rem, env(safe-area-inset-top)) 18px 48vh;
+    gap: 0.75rem;
+  }
+
+  .welcome__mark {
+    font-size: clamp(3.4rem, 15vw, 5rem);
+  }
+
+  .welcome__title {
+    font-size: clamp(1rem, 4.2vw, 1.2rem);
+    max-width: 18ch;
+  }
+
+  .welcome__lead {
+    font-size: 0.95rem;
+    max-width: 28ch;
+  }
+
+  .welcome__cta {
+    padding: 14px 20px;
+    width: 100%;
+    justify-content: center;
   }
 
   .welcome__hat-wrap {
-    width: min(108vw, 420px);
-    bottom: 0;
+    width: min(112vw, 400px);
+    bottom: max(0px, env(safe-area-inset-bottom));
+  }
+
+  .welcome__spot {
+    top: 8%;
+    height: 40vh;
+  }
+
+  .welcome__beams {
+    bottom: 12%;
+    height: 50vh;
+  }
+
+  .welcome__smoke {
+    bottom: 10%;
+    width: 240px;
+  }
+
+  .welcome__smoke--b {
+    width: 300px;
+    bottom: 8%;
+  }
+}
+
+@media (max-width: 480px) and (max-height: 700px) {
+  .welcome__copy {
+    padding-top: 2rem;
+    padding-bottom: 44vh;
+  }
+
+  .welcome__mark {
+    font-size: clamp(2.8rem, 13vw, 4rem);
   }
 }
 </style>

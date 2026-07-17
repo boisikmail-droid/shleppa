@@ -1,7 +1,6 @@
 <template>
   <div class="container waiting">
     <header class="waiting__header">
-      <span class="waiting__icon">{{ roundTitle.icon }}</span>
       <h2 class="waiting__title">{{ roundTitle.text }}</h2>
     </header>
 
@@ -41,6 +40,9 @@
       <p class="stat-row__hint">После {{ cycleLength }} угаданных слов цикл уровней начнётся снова</p>
     </div>
 
+    <button class="button-primary" @click="onReady">Готов</button>
+    <p class="waiting__sound-hint">При нажатии «Готов» прозвучит сигнал старта. За 5 секунд до конца — предупреждение.</p>
+
     <div class="card" v-if="gameStore.teams.length">
       <h3>Счёт</h3>
       <ul class="score-list">
@@ -53,18 +55,6 @@
         </li>
       </ul>
     </div>
-
-    <div class="card" v-if="gameStore.nextPlayers.length">
-      <h3>Следующие ходы</h3>
-      <ul class="next-players">
-        <li v-for="(p, i) in gameStore.nextPlayers" :key="i">
-          {{ p.team_name }} — {{ p.player_name }}
-        </li>
-      </ul>
-    </div>
-
-    <button class="button-primary" @click="onReady">Готов</button>
-    <p class="waiting__sound-hint">При нажатии «Готов» прозвучит сигнал старта. За 5 секунд до конца — предупреждение.</p>
   </div>
 </template>
 
@@ -107,14 +97,7 @@ async function onReady() {
 <style scoped>
 .waiting__header {
   text-align: center;
-  margin-bottom: 24px;
-}
-
-.waiting__icon {
-  font-size: 3rem;
-  display: block;
-  margin-bottom: 8px;
-  filter: drop-shadow(0 0 16px var(--title-glow));
+  margin-bottom: 16px;
 }
 
 .waiting__title {
@@ -207,7 +190,7 @@ async function onReady() {
 }
 
 .waiting__sound-hint {
-  margin-top: 12px;
+  margin: 12px 0 16px;
   font-size: 0.8rem;
   color: var(--text-dim);
   text-align: center;

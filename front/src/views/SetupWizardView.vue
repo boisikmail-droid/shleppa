@@ -21,7 +21,7 @@
 
     <div v-if="error" class="error-msg">{{ error }}</div>
 
-    <!-- Step 1: teams -->
+    <!-- Step 1: pool + shuffle into teams -->
     <section v-if="step === 1" class="setup__panel">
       <label class="setup__label">Количество команд</label>
       <div class="setup__team-count">
@@ -37,54 +37,71 @@
         </button>
       </div>
 
-      <div v-for="(team, ti) in teams" :key="ti" class="setup__team">
-        <h3 class="section-title">Команда {{ ti + 1 }}</h3>
-        <label>Название</label>
-        <div class="player-row setup__name-row">
-          <input v-model="team.name" type="text" placeholder="Название команды" maxlength="100" />
-          <button type="button" title="Случайное название" @click="rerollName(ti)">
-            🎲
-          </button>
-        </div>
-
-        <label>Шляпа команды</label>
-        <div class="setup__hat-current">
-          <img :src="getHat(team.hatId).src" :alt="getHat(team.hatId).label" class="setup__hat-preview" />
-          <div class="setup__hat-meta">
-            <span class="setup__hat-label">{{ getHat(team.hatId).label }}</span>
-            <div class="setup__hat-actions">
-              <button type="button" class="button-secondary setup__hat-btn" @click="rerollHat(ti)">
-                Случайная
-              </button>
-              <button type="button" class="button-secondary setup__hat-btn" @click="openHatPicker(ti)">
-                Выбрать…
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <label>Игроки</label>
-        <div v-for="(player, pi) in team.players" :key="pi" class="player-row">
-          <input v-model="team.players[pi]" type="text" placeholder="Имя игрока" maxlength="100" />
-          <button
-            v-if="team.players.length > 1"
-            type="button"
-            @click="removePlayer(ti, pi)"
-          >
-            ✕
-          </button>
-        </div>
+      <h3 class="section-title">Список игроков</h3>
+      <p class="setup__hint">Сначала всех в общий список — потом перемешаем по командам.</p>
+      <div v-for="(_, pi) in playerPool" :key="'p' + pi" class="player-row">
+        <input
+          v-model="playerPool[pi]"
+          type="text"
+          placeholder="Имя игрока"
+          maxlength="100"
+        />
         <button
-          v-if="team.players.length < 10"
+          v-if="playerPool.length > 1"
           type="button"
-          class="button-secondary"
-          @click="addPlayer(ti)"
+          @click="removePoolPlayer(pi)"
         >
-          + Игрок
+          ✕
         </button>
       </div>
+      <button
+        v-if="playerPool.length < 40"
+        type="button"
+        class="button-secondary"
+        @click="addPoolPlayer"
+      >
+        + Игрок
+      </button>
 
-      <button type="button" class="button-primary" @click="confirmTeams">
+      <button type="button" class="button-primary setup__shuffle" @click="shuffleIntoTeams">
+        Перемешать по командам
+      </button>
+      <p v-if="!shuffledOnce" class="setup__hint">Можно кликать сколько угодно раз — состав команд будет случайным.</p>
+
+      <template v-if="shuffledOnce">
+        <div v-for="(team, ti) in teams" :key="'t' + ti" class="setup__team">
+          <h3 class="section-title">Команда {{ ti + 1 }}</h3>
+          <label>Название</label>
+          <div class="player-row setup__name-row">
+            <input v-model="team.name" type="text" placeholder="Название команды" maxlength="100" />
+            <button type="button" title="Случайное название" @click="rerollName(ti)">🎲</button>
+          </div>
+
+          <label>Шляпа команды</label>
+          <div class="setup__hat-current">
+            <img :src="getHat(team.hatId).src" :alt="getHat(team.hatId).label" class="setup__hat-preview" />
+            <div class="setup__hat-meta">
+              <span class="setup__hat-label">{{ getHat(team.hatId).label }}</span>
+              <div class="setup__hat-actions">
+                <button type="button" class="button-secondary setup__hat-btn" @click="rerollHat(ti)">
+                  Случайная
+                </button>
+                <button type="button" class="button-secondary setup__hat-btn" @click="openHatPicker(ti)">
+                  Выбрать…
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <label>Игроки после перемешки</label>
+          <ul class="setup__roster">
+            <li v-for="(name, ni) in team.players" :key="ni">{{ name }}</li>
+            <li v-if="!team.players.length" class="setup__roster-empty">пока пусто</li>
+          </ul>
+        </div>
+      </template>
+
+      <button type="button" class="button-primary" :disabled="!shuffledOnce" @click="confirmTeams">
         Подтвердить состав команд
       </button>
     </section>
@@ -107,13 +124,37 @@
         </div>
       </div>
 
+      <label class="setup__check setup__check--opt">
+        <input v-model="skipPenaltyOn" type="checkbox" />
+        <span>
+          <strong>Штраф за пропуск слова</strong>
+          <em>без галочки пропуск ничего не стоит</em>
+        </span>
+      </label>
+
+      <div v-if="skipPenaltyOn" class="slider-group setup__penalty">
+        <label>Штраф — {{ skipPenalty }} {{ penaltyWord }}</label>
+        <input v-model.number="skipPenalty" type="range" min="1" max="5" step="1" />
+        <div class="slider-labels">
+          <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+        </div>
+      </div>
+
+      <label class="setup__check setup__check--opt">
+        <input v-model="lastWordCommon" type="checkbox" />
+        <span>
+          <strong>Последнее слово общее</strong>
+          <em>после таймера слово могут угадывать все команды</em>
+        </span>
+      </label>
+
       <div class="setup__nav">
         <button type="button" class="button-secondary" @click="step = 1">Назад</button>
         <button type="button" class="button-primary" @click="step = 3">Далее</button>
       </div>
     </section>
 
-    <!-- Step 3: filters -->
+    <!-- Step 3: difficulty + categories -->
     <section v-else class="setup__panel">
       <h3 class="section-title">Сложность слов</h3>
       <p class="setup__hint">По умолчанию выбрано всё. Снимите лишнее.</p>
@@ -189,7 +230,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../services/api'
 import { useSessionStore } from '../stores/sessionStore'
@@ -209,15 +250,20 @@ const vkStore = useVkStore()
 
 const step = ref(1)
 const stepTitles = [
-  'Состав команд',
+  'Игроки и команды',
   'Слова и время',
   'Сложность и категории',
 ]
 
 const teamCount = ref(2)
 const teams = ref(makeTeams(2))
+const playerPool = ref(['', '', '', ''])
+const shuffledOnce = ref(false)
 const totalWords = ref(60)
 const timeLimit = ref(60)
+const skipPenaltyOn = ref(true)
+const skipPenalty = ref(2)
+const lastWordCommon = ref(true)
 const selectedDifficulties = ref(DIFFICULTY_LEVELS.map((l) => l.id))
 const selectedCategories = ref(CATEGORIES.map((c) => c.id))
 const soundOn = ref(isSoundEnabled())
@@ -225,14 +271,67 @@ const loading = ref(false)
 const error = ref('')
 const hatPickerTeam = ref(null)
 
+const penaltyWord = computed(() => {
+  const n = skipPenalty.value
+  if (n === 1) return 'балл'
+  if (n >= 2 && n <= 4) return 'балла'
+  return 'баллов'
+})
+
 function makeTeams(n, excludeNames = [], excludeHats = []) {
   const names = pickTeamNames(n, excludeNames)
   const hats = pickHatIds(n, excludeHats)
   return Array.from({ length: n }, (_, i) => ({
     name: names[i],
     hatId: hats[i],
-    players: [''],
+    players: [],
   }))
+}
+
+function namedPool() {
+  return playerPool.value.map((p) => p.trim()).filter(Boolean)
+}
+
+function shuffleArray(arr) {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+function shuffleIntoTeams() {
+  error.value = ''
+  const names = namedPool()
+  if (names.length < teamCount.value) {
+    error.value = `Нужно минимум ${teamCount.value} игрока с именами (по одному на команду)`
+    return
+  }
+
+  const shuffled = shuffleArray(names)
+  const buckets = Array.from({ length: teamCount.value }, () => [])
+  shuffled.forEach((name, i) => {
+    buckets[i % teamCount.value].push(name)
+  })
+
+  teams.value = teams.value.map((t, i) => ({
+    ...t,
+    players: buckets[i] || [],
+  }))
+  shuffledOnce.value = true
+}
+
+function addPoolPlayer() {
+  if (playerPool.value.length < 40) {
+    playerPool.value.push('')
+  }
+}
+
+function removePoolPlayer(pi) {
+  if (playerPool.value.length > 1) {
+    playerPool.value.splice(pi, 1)
+  }
 }
 
 function rerollName(ti) {
@@ -277,7 +376,7 @@ function setTeamCount(n) {
     kept.push({
       name: prev[i].name,
       hatId: prev[i].hatId || pickOneHatId(kept.map((t) => t.hatId)),
-      players: [...prev[i].players],
+      players: [],
     })
   }
   if (kept.length < n) {
@@ -290,33 +389,24 @@ function setTeamCount(n) {
   }
   teamCount.value = n
   teams.value = kept
-}
-
-function addPlayer(ti) {
-  if (teams.value[ti].players.length < 10) {
-    teams.value[ti].players.push('')
-  }
-}
-
-function removePlayer(ti, pi) {
-  if (teams.value[ti].players.length > 1) {
-    teams.value[ti].players.splice(pi, 1)
-  }
+  shuffledOnce.value = false
 }
 
 function confirmTeams() {
   error.value = ''
+  if (!shuffledOnce.value) {
+    error.value = 'Сначала перемешайте игроков по командам'
+    return
+  }
   for (const team of teams.value) {
     if (!team.name.trim()) {
       error.value = 'У каждой команды должно быть название'
       return
     }
-    const named = team.players.map((p) => p.trim()).filter(Boolean)
-    if (named.length < 1) {
-      error.value = 'В каждой команде нужен хотя бы один игрок с именем'
+    if (!team.players.length) {
+      error.value = 'В каждой команде нужен хотя бы один игрок'
       return
     }
-    team.players = named
   }
   step.value = 2
 }
@@ -352,6 +442,8 @@ async function startGame() {
       time_limit: timeLimit.value,
       difficulties: [...selectedDifficulties.value].sort((a, b) => a - b),
       categories: [...selectedCategories.value],
+      skip_penalty: skipPenaltyOn.value ? skipPenalty.value : 0,
+      last_word_common: lastWordCommon.value,
     })
     sessionStore.setSessionId(data.session_id)
     router.push(`/game/${data.session_id}`)
@@ -365,10 +457,8 @@ async function startGame() {
 
 onMounted(async () => {
   await vkStore.bootstrap()
-  if (vkStore.displayName && teams.value[0]) {
-    if (!teams.value[0].players[0]) {
-      teams.value[0].players[0] = vkStore.displayName
-    }
+  if (vkStore.displayName && !playerPool.value[0]) {
+    playerPool.value[0] = vkStore.displayName
   }
 })
 </script>
@@ -460,9 +550,35 @@ onMounted(async () => {
   background: var(--hint-bg);
 }
 
+.setup__shuffle {
+  margin-top: 0.5rem;
+}
+
 .setup__team {
   padding: 12px 0 4px;
   border-top: 1px solid var(--border);
+}
+
+.setup__roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.setup__roster li {
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+}
+
+.setup__roster-empty {
+  color: var(--text-muted);
+  border-style: dashed !important;
 }
 
 .setup__hat-current {
@@ -667,5 +783,15 @@ onMounted(async () => {
 
 .slider-group {
   padding: 8px 0;
+}
+
+.setup__check--opt {
+  border-bottom: none;
+  padding: 10px 0 2px;
+}
+
+.setup__penalty {
+  margin-left: 26px;
+  padding-top: 0;
 }
 </style>

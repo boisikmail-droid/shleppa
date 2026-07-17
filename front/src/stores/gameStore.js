@@ -26,6 +26,8 @@ export const useGameStore = defineStore('game', {
     gameFinished: false,
     finalScores: null,
     teams: [],
+    skipPenalty: 2,
+    lastWordCommon: true,
     screen: 'waiting',
     showRoundTransition: false,
     previousStatus: null,
@@ -51,6 +53,10 @@ export const useGameStore = defineStore('game', {
       this.nextPlayers = data.next_players || []
       this.timeLimit = data.time_limit
       this.teams = data.teams || []
+      if (data.settings) {
+        this.skipPenalty = data.settings.skip_penalty ?? 2
+        this.lastWordCommon = data.settings.last_word_common ?? true
+      }
       if (data.remaining_words !== undefined && data.remaining_words !== null) {
         this.remainingWords = data.remaining_words
       }
@@ -155,7 +161,7 @@ export const useGameStore = defineStore('game', {
 
       if (wordRes.data.finished) {
         this.remainingWords = wordRes.data.remaining_words ?? this.remainingWords
-        this.endTurnLocally()
+        await this.endTurnOrCorrect()
         return { finished: true }
       }
 
@@ -173,10 +179,23 @@ export const useGameStore = defineStore('game', {
       this.screen = 'correction'
     },
 
+    // Если за ход не было ни угаданных, ни пропущенных слов —
+    // экран правки итогов не нужен, завершаем ход сразу
+    async endTurnOrCorrect() {
+      if (!this.currentTurnLog.length && this.turnId) {
+        this.isTurnActive = false
+        this.currentWord = null
+        this.turnTimeRemaining = null
+        await this.finishTurn([])
+        return
+      }
+      this.endTurnLocally()
+    },
+
     async resolveLastWord(teamId = null) {
       const word = this.currentWord
       if (!word || !this.turnId) {
-        this.endTurnLocally()
+        await this.endTurnOrCorrect()
         return { awarded: false }
       }
 
@@ -198,7 +217,7 @@ export const useGameStore = defineStore('game', {
         }
       }
 
-      this.endTurnLocally()
+      await this.endTurnOrCorrect()
       return data
     },
 

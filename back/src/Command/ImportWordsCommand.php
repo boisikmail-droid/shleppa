@@ -74,12 +74,14 @@ class ImportWordsCommand extends Command
         foreach (CategoryConfig::allSlugs() as $category) {
             /** @var array<string, true> */
             $seenInCategory = [];
+            $maxLevel = CategoryConfig::maxLevelFor($category);
 
-            for ($level = 1; $level <= DifficultyConfig::MAX_LEVEL; ++$level) {
+            for ($level = 1; $level <= $maxLevel; ++$level) {
                 $path = $dataDir.'/'.$category.'/level_'.$level.'.php';
 
                 if (!is_file($path)) {
-                    throw new \RuntimeException(sprintf('Word file not found: %s', $path));
+                    $io->warning(sprintf('Word file missing (skipped): %s', $path));
+                    continue;
                 }
 
                 /** @var mixed $list */

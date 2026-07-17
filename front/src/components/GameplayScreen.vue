@@ -6,46 +6,19 @@
       'gameplay--timeup': timeUp,
     }"
   >
-    <header class="gameplay-header">
-      <div class="gameplay-header__round">
-        <span class="gameplay-header__icon">{{ roundTitle.icon }}</span>
-        <div class="gameplay-header__round-text">
-          <span class="gameplay-header__round-label">Раунд {{ gameStore.round }}</span>
-          <span class="gameplay-header__round-mode">{{ roundTitle.short }}</span>
-        </div>
-      </div>
-      <div class="gameplay-header__stats">
-        <div class="stat-pill">
-          <span class="stat-pill__value">{{ gameStore.remainingWords }}</span>
-          <span class="stat-pill__label">неотгадано</span>
-        </div>
-        <div class="stat-pill stat-pill--gold">
-          <span class="stat-pill__value">{{ gameStore.wordsGuessedThisTurn }}</span>
-          <span class="stat-pill__label">за ход</span>
-        </div>
-        <div
-          v-for="t in gameStore.teams"
-          :key="t.id"
-          class="stat-pill"
-          :class="{ 'stat-pill--active': t.id === gameStore.currentTeam?.id }"
-        >
-          <span class="stat-pill__value">{{ t.score }}</span>
-          <span class="stat-pill__label">{{ t.name }}</span>
-        </div>
-      </div>
-    </header>
-
     <p class="gameplay-subtitle">
-      {{ timeUp ? 'Общее слово — могут угадывать все' : roundTitle.text }}
+      {{ timeUp ? 'Общее слово — могут угадывать все' : `Раунд ${gameStore.round} · ${roundTitle.short}` }}
     </p>
 
-    <div class="gameplay-hat-wrap">
+    <div class="gameplay-team-row">
       <TeamHat
         :hat-id="gameStore.currentTeam?.hat_id || 'tophat'"
-        size="lg"
+        size="sm"
       />
-      <p class="gameplay-hat-caption">{{ gameStore.currentTeam?.name }}</p>
-      <p class="gameplay-hat-player">{{ gameStore.currentPlayer?.name }}</p>
+      <div class="gameplay-team-row__names">
+        <p class="gameplay-hat-caption">{{ gameStore.currentTeam?.name }}</p>
+        <p class="gameplay-hat-player">{{ gameStore.currentPlayer?.name }}</p>
+      </div>
     </div>
 
     <div class="gameplay-timer-row">
@@ -76,29 +49,22 @@
 
     <div v-if="!timeUp" class="action-row">
       <button
-        class="button-guess"
-        :disabled="locked || paused"
-        @click="doAction('guess')"
-      >
-        Верно
-      </button>
-      <button
         class="button-skip"
         :disabled="locked || paused"
         @click="doAction('skip')"
       >
         Пропуск
       </button>
+      <button
+        class="button-guess"
+        :disabled="locked || paused"
+        @click="doAction('guess')"
+      >
+        Верно
+      </button>
     </div>
 
     <div v-else class="action-row action-row--timeup">
-      <button
-        class="button-guess"
-        :disabled="locked || pickingTeam"
-        @click="pickingTeam = true"
-      >
-        Угадано
-      </button>
       <button
         class="button-skip"
         :disabled="locked || pickingTeam"
@@ -106,6 +72,33 @@
       >
         Никто не угадал
       </button>
+      <button
+        class="button-guess"
+        :disabled="locked || pickingTeam"
+        @click="pickingTeam = true"
+      >
+        Угадано
+      </button>
+    </div>
+
+    <div class="gameplay-stats">
+      <div class="stat-pill">
+        <span class="stat-pill__value">{{ gameStore.remainingWords }}</span>
+        <span class="stat-pill__label">неотгадано</span>
+      </div>
+      <div class="stat-pill stat-pill--gold">
+        <span class="stat-pill__value">{{ gameStore.wordsGuessedThisTurn }}</span>
+        <span class="stat-pill__label">за ход</span>
+      </div>
+      <div
+        v-for="t in gameStore.teams"
+        :key="t.id"
+        class="stat-pill"
+        :class="{ 'stat-pill--active': t.id === gameStore.currentTeam?.id }"
+      >
+        <span class="stat-pill__value">{{ t.score }}</span>
+        <span class="stat-pill__label">{{ t.name }}</span>
+      </div>
     </div>
 
     <div v-if="paused" class="pause-overlay" role="dialog" aria-modal="true" aria-label="Пауза">
@@ -187,12 +180,14 @@ function onTick(remaining) {
 
 function onTimeout() {
   paused.value = false
-  if (!gameStore.currentWord) {
+  gameStore.turnTimeRemaining = 0
+  // Общее последнее слово выключено — ход просто заканчивается,
+  // текущее слово остаётся в шляпе
+  if (!gameStore.currentWord || !gameStore.lastWordCommon) {
     emit('timeout')
     return
   }
   timeUp.value = true
-  gameStore.turnTimeRemaining = 0
 }
 
 async function doAction(action) {
@@ -248,72 +243,14 @@ async function missLastWord() {
   position: relative;
 }
 
-.gameplay-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 18px;
-  margin-bottom: 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-gold), var(--shadow);
-  position: relative;
-  overflow: hidden;
-}
-
-.gameplay-header::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--gold), transparent);
-  opacity: 0.5;
-}
-
-.gameplay-header__round {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.gameplay-header__icon {
-  font-size: 2rem;
-  line-height: 1;
-  filter: drop-shadow(0 0 8px rgba(201, 162, 39, 0.4));
-}
-
-.gameplay-header__round-text {
-  display: flex;
-  flex-direction: column;
-}
-
-.gameplay-header__round-label {
-  font-family: var(--font-heading);
-  font-size: 0.65rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-
-.gameplay-header__round-mode {
-  font-family: var(--font-heading);
-  font-size: 1.1rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--gold);
-}
-
-.gameplay-header__stats {
+.gameplay-stats {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  justify-content: flex-end;
-  max-width: 60%;
+  justify-content: center;
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
 }
 
 .stat-pill {
@@ -365,15 +302,23 @@ async function missLastWord() {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--text-dim);
+  margin: 4px 0 8px;
+}
+
+.gameplay-team-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   margin: 0 0 8px;
 }
 
-.gameplay-hat-wrap {
+.gameplay-team-row__names {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  margin: 4px 0 8px;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
 }
 
 .gameplay-hat-caption {
@@ -388,7 +333,7 @@ async function missLastWord() {
 .gameplay-hat-player {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(1.35rem, 4.5vw, 1.85rem);
+  font-size: clamp(1.1rem, 4vw, 1.4rem);
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: 0.02em;

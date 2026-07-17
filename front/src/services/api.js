@@ -32,6 +32,10 @@ export default {
     return withRetry(() => api.get(`/session/${sessionId}/state`), 1)
   },
 
+  getRecap(sessionId) {
+    return withRetry(() => api.get(`/session/${sessionId}/recap`), 1)
+  },
+
   getNextWord(sessionId, teamId, round, excludeWordIds = []) {
     const params = { session_id: sessionId, team_id: teamId, round }
     if (excludeWordIds.length) {

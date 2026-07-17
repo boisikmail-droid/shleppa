@@ -9,8 +9,9 @@ class ScoreCalculator
     /**
      * @param TurnLog[] $turnLogs
      * @param array<int, array{word_id: int, checked: bool}> $corrections keyed by word_id
+     * @param int $skipPenalty баллы за пропуск (0 = без штрафа)
      */
-    public function calculateScoreChange(array $turnLogs, array $corrections): int
+    public function calculateScoreChange(array $turnLogs, array $corrections, int $skipPenalty = 2): int
     {
         $scoreChange = 0;
 
@@ -29,7 +30,7 @@ class ScoreCalculator
             } elseif ($status === TurnLog::STATUS_GUESSED && !$checked) {
                 $scoreChange += 0;
             } elseif ($status === TurnLog::STATUS_SKIPPED && !$checked) {
-                $scoreChange -= 2;
+                $scoreChange -= $skipPenalty;
             } elseif ($status === TurnLog::STATUS_SKIPPED && $checked) {
                 $scoreChange += 1;
             }

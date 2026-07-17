@@ -1,0 +1,29 @@
+# Dependencies / build
+**/node_modules/
+**/vendor/
+**/dist/
+**/var/
+front/bin/
+
+# Env / secrets (keep committed Symfony .env templates)
+**/.env.local
+**/.env.*.local
+**/.env.local.php
+docker/.env
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+back/scripts/ext/
+
+# Dictionary audit artefacts
+back/scripts/_*.txt
+back/scripts/words/_*.txt
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

@@ -57,7 +57,7 @@ class GameSession
     /**
      * Выбранные сложности, категории и цикл хода.
      *
-     * @var array{difficulties?: int[], categories?: string[], cycle?: int[]}
+     * @var array{difficulties?: int[], categories?: string[], cycle?: int[], skip_penalty?: int, last_word_common?: bool}
      */
     #[ORM\Column(type: Types::JSON)]
     private array $settings = [];
@@ -182,7 +182,7 @@ class GameSession
     }
 
     /**
-     * @return array{difficulties?: int[], categories?: string[], cycle?: int[]}
+     * @return array{difficulties?: int[], categories?: string[], cycle?: int[], skip_penalty?: int, last_word_common?: bool}
      */
     public function getSettings(): array
     {
@@ -190,7 +190,7 @@ class GameSession
     }
 
     /**
-     * @param array{difficulties?: int[], categories?: string[], cycle?: int[]} $settings
+     * @param array{difficulties?: int[], categories?: string[], cycle?: int[], skip_penalty?: int, last_word_common?: bool} $settings
      */
     public function setSettings(array $settings): static
     {

@@ -10,18 +10,23 @@ export const DIFFICULTY_LEVELS = [
 ]
 
 export const CATEGORIES = [
+  { id: 'everyday', label: 'Повседневность' },
+  { id: 'food', label: 'Еда и напитки' },
+  { id: 'animals', label: 'Животные' },
+  { id: 'nature', label: 'Природа и погода' },
+  { id: 'movies', label: 'Мультфильмы и кино' },
+  { id: 'places', label: 'Места' },
+  { id: 'transport', label: 'Транспорт' },
   { id: 'clothes', label: 'Одежда' },
   { id: 'furniture', label: 'Мебель' },
   { id: 'profession', label: 'Профессия' },
-  { id: 'animals', label: 'Животные' },
   { id: 'school', label: 'Школьная программа (5–11)' },
   { id: 'celebrities', label: 'Знаменитости' },
-  { id: 'movies', label: 'Мультфильмы и кино' },
   { id: 'feelings', label: 'Чувства и ощущения' },
-  { id: 'food', label: 'Еда и напитки' },
   { id: 'sport', label: 'Спорт' },
   { id: 'tech', label: 'Техника и гаджеты' },
-  { id: 'nature', label: 'Природа и погода' },
+  { id: 'phrases', label: 'Адекватные словосочетания' },
+  { id: 'random_phrases', label: 'Случайные словосочетания' },
 ]
 
 export function formatDifficultyStars(level) {

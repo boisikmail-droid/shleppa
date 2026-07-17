@@ -34,7 +34,7 @@
       <strong>Как исправлять</strong><br />
       «Верно» по ошибке — снимите галочку (0 баллов)<br />
       «Пропуск», но угадали — поставьте галочку (+1)<br />
-      «Пропуск» и не угадали — галочку снять (−2)
+      «Пропуск» и не угадали — галочку снять ({{ skipHint }})
     </div>
 
     <button class="button-primary" :disabled="loading" @click="submit">
@@ -44,7 +44,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useGameStore } from '../stores/gameStore'
 
 const emit = defineEmits(['submit'])
@@ -52,6 +52,10 @@ const gameStore = useGameStore()
 const loading = ref(false)
 
 const items = ref([])
+
+const skipHint = computed(() =>
+  gameStore.skipPenalty > 0 ? `−${gameStore.skipPenalty}` : 'без штрафа'
+)
 
 onMounted(() => {
   items.value = gameStore.currentTurnLog.map((log) => ({

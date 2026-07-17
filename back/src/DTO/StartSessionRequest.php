@@ -10,7 +10,7 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 class StartSessionRequest
 {
     /**
-     * @var list<array{name?: string, players?: list<string>}>
+     * @var list<array{name?: string, players?: list<string>, hat_id?: string}>
      */
     #[Assert\Count(min: 2, max: 4)]
     public array $teams = [];
@@ -26,8 +26,13 @@ class StartSessionRequest
     public array $difficulties = [];
 
     /** @var string[] */
-    #[Assert\Count(min: 1)]
     public array $categories = [];
+
+    /** 0 = штраф отключён */
+    #[Assert\Range(min: 0, max: 5)]
+    public int $skipPenalty = 2;
+
+    public bool $lastWordCommon = true;
 
     #[Assert\Callback]
     public function validateTeams(ExecutionContextInterface $context): void
@@ -80,6 +85,12 @@ class StartSessionRequest
                     ->addViolation();
                 break;
             }
+        }
+
+        if ($this->categories === []) {
+            $context->buildViolation('Выберите хотя бы одну категорию слов.')
+                ->atPath('categories')
+                ->addViolation();
         }
     }
 }

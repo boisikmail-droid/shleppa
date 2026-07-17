@@ -56,16 +56,22 @@ class ApiController extends AbstractController
         $dto->totalWords = (int) ($data['total_words'] ?? 60);
         $dto->timeLimit = (int) ($data['time_limit'] ?? 60);
         $rawDifficulties = $data['difficulties'] ?? \App\Config\DifficultyConfig::allLevelIds();
-        $rawCategories = $data['categories'] ?? \App\Config\CategoryConfig::allSlugs();
+        $rawCategories = $data['categories'] ?? [];
         $dto->difficulties = is_array($rawDifficulties)
             ? array_values(array_map('intval', $rawDifficulties))
             : \App\Config\DifficultyConfig::allLevelIds();
         $dto->categories = is_array($rawCategories)
-            ? array_values(array_map(
+            ? array_values(array_filter(array_map(
                 static fn ($c) => is_scalar($c) ? (string) $c : '',
                 $rawCategories
-            ))
-            : \App\Config\CategoryConfig::allSlugs();
+            )))
+            : [];
+        if ($dto->categories === []) {
+            $dto->categories = \App\Config\CategoryConfig::allSlugs();
+        }
+
+        $dto->skipPenalty = max(0, min(5, (int) ($data['skip_penalty'] ?? 2)));
+        $dto->lastWordCommon = (bool) ($data['last_word_common'] ?? true);
 
         $errors = $this->validator->validate($dto);
         if (count($errors) > 0) {
@@ -96,6 +102,8 @@ class ApiController extends AbstractController
                 $dto->timeLimit,
                 $dto->difficulties,
                 $dto->categories,
+                $dto->skipPenalty,
+                $dto->lastWordCommon,
             );
         } catch (\InvalidArgumentException $e) {
             return $this->json(['errors' => [$e->getMessage()]], Response::HTTP_UNPROCESSABLE_ENTITY);
@@ -116,6 +124,17 @@ class ApiController extends AbstractController
         }
 
         return $this->json($this->gameSessionService->getState($session));
+    }
+
+    #[Route('/session/{id}/recap', name: 'session_recap', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function getRecap(int $id): JsonResponse
+    {
+        $session = $this->sessionRepository->find($id);
+        if (!$session) {
+            return $this->json(['error' => 'Session not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        return $this->json($this->gameSessionService->getRecap($session));
     }
 
     #[Route('/game/next-word', name: 'game_next_word', methods: ['GET'])]

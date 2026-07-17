@@ -53,4 +53,19 @@ class TurnLogRepository extends ServiceEntityRepository
 
         return ['turn' => $turn, 'logs' => $logs];
     }
+
+    /** @return TurnLog[] */
+    public function findAllForSession(int $sessionId): array
+    {
+        return $this->createQueryBuilder('tl')
+            ->join('tl.word', 'w')->addSelect('w')
+            ->join('tl.team', 't')->addSelect('t')
+            ->join('tl.player', 'p')->addSelect('p')
+            ->where('tl.session = :sessionId')
+            ->setParameter('sessionId', $sessionId)
+            ->orderBy('tl.round', 'ASC')
+            ->addOrderBy('tl.createdAt', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }

@@ -65,12 +65,12 @@ function handleSkip() {
   /* handled in GameplayScreen */
 }
 
-function handleTimeout() {
+async function handleTimeout() {
   // last-word flow already switches to correction via resolveLastWord()
-  if (gameStore.screen === 'correction' || gameStore.screen === 'results') {
+  if (gameStore.screen === 'correction' || gameStore.screen === 'results' || gameStore.screen === 'waiting') {
     return
   }
-  gameStore.endTurnLocally()
+  await gameStore.endTurnOrCorrect()
 }
 
 async function handleFinishTurn(corrections) {
