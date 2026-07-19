@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'hat-sound-enabled'
 
 let audioCtx = null
+let unlockBound = false
 
 export function isSoundEnabled() {
   return localStorage.getItem(STORAGE_KEY) !== 'false'
@@ -18,14 +19,40 @@ function getContext() {
 }
 
 /**
- * Разблокирует AudioContext — вызывать синхронно из обработчика клика.
- * Браузеры блокируют звук без жеста пользователя (клик / тап).
+ * Разблокирует AudioContext (VK WebView / iOS требуют жест + await resume).
  */
-export function initAudioOnGesture() {
+export async function initAudioOnGesture() {
   const ctx = getContext()
-  if (ctx.state === 'suspended') {
-    ctx.resume()
+  try {
+    if (ctx.state === 'suspended') {
+      await ctx.resume()
+    }
+    // Тихий буфер — добивает разблокировку в iOS/WebView
+    const buffer = ctx.createBuffer(1, 1, 22050)
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    source.connect(ctx.destination)
+    source.start(0)
+  } catch (err) {
+    console.warn('[timerSounds] unlock failed:', err)
   }
+}
+
+/** Один раз на первый тап/клик по странице (важно для VK Mini App). */
+export function bindAudioUnlockOnFirstGesture() {
+  if (unlockBound || typeof document === 'undefined') return
+  unlockBound = true
+
+  const unlock = () => {
+    initAudioOnGesture()
+    document.removeEventListener('pointerdown', unlock, true)
+    document.removeEventListener('touchstart', unlock, true)
+    document.removeEventListener('click', unlock, true)
+  }
+
+  document.addEventListener('pointerdown', unlock, true)
+  document.addEventListener('touchstart', unlock, true)
+  document.addEventListener('click', unlock, true)
 }
 
 function playTone(ctx, frequency, startOffset, duration, volume = 0.55, type = 'sine') {
@@ -47,14 +74,12 @@ function playTone(ctx, frequency, startOffset, duration, volume = 0.55, type = '
   osc.stop(t + duration + 0.05)
 }
 
-function playSequence(tones) {
+async function playSequence(tones) {
   if (!isSoundEnabled()) return
 
   try {
+    await initAudioOnGesture()
     const ctx = getContext()
-    if (ctx.state === 'suspended') {
-      ctx.resume()
-    }
     for (const tone of tones) {
       playTone(
         ctx,
@@ -72,7 +97,7 @@ function playSequence(tones) {
 
 /** Сигнал старта хода — трёхтоновый перезвон */
 export function playTurnStart() {
-  playSequence([
+  return playSequence([
     { freq: 523, at: 0, dur: 0.25, vol: 0.65 },
     { freq: 659, at: 0.14, dur: 0.3, vol: 0.6 },
     { freq: 784, at: 0.3, dur: 0.4, vol: 0.55, type: 'triangle' },
@@ -81,7 +106,7 @@ export function playTurnStart() {
 
 /** За 10 секунд до конца — тройной звонок */
 export function playTenSecondWarning() {
-  playSequence([
+  return playSequence([
     { freq: 880, at: 0, dur: 0.15, vol: 0.7, type: 'triangle' },
     { freq: 840, at: 0.14, dur: 0.15, vol: 0.7, type: 'triangle' },
     { freq: 800, at: 0.28, dur: 0.15, vol: 0.7, type: 'triangle' },
@@ -91,12 +116,12 @@ export function playTenSecondWarning() {
 /** Пик обратного отсчёта (5…1) — короткий щелчок, выше ближе к нулю */
 export function playCountdownTick(secondsLeft) {
   const freq = 660 + (5 - Math.min(Math.max(secondsLeft, 1), 5)) * 80
-  playSequence([{ freq, at: 0, dur: 0.08, vol: 0.65, type: 'square' }])
+  return playSequence([{ freq, at: 0, dur: 0.08, vol: 0.65, type: 'square' }])
 }
 
 /** Время вышло — нисходящий гонг */
 export function playTimeUp() {
-  playSequence([
+  return playSequence([
     { freq: 440, at: 0, dur: 0.4, vol: 0.7, type: 'triangle' },
     { freq: 330, at: 0.12, dur: 0.4, vol: 0.65, type: 'triangle' },
     { freq: 220, at: 0.28, dur: 0.55, vol: 0.7 },
@@ -106,7 +131,7 @@ export function playTimeUp() {
 
 /** Слово угадано — короткий восходящий «динь» */
 export function playGuess() {
-  playSequence([
+  return playSequence([
     { freq: 587, at: 0, dur: 0.12, vol: 0.55, type: 'sine' },
     { freq: 784, at: 0.06, dur: 0.18, vol: 0.6, type: 'triangle' },
     { freq: 988, at: 0.14, dur: 0.22, vol: 0.5, type: 'sine' },
@@ -115,7 +140,7 @@ export function playGuess() {
 
 /** Пропуск — мягкий нисходящий щелчок */
 export function playSkip() {
-  playSequence([
+  return playSequence([
     { freq: 392, at: 0, dur: 0.1, vol: 0.45, type: 'triangle' },
     { freq: 294, at: 0.05, dur: 0.14, vol: 0.4, type: 'triangle' },
     { freq: 220, at: 0.1, dur: 0.18, vol: 0.35, type: 'sine' },
@@ -123,11 +148,11 @@ export function playSkip() {
 }
 
 /** Проверка звука из лобби */
-export function testSound() {
-  initAudioOnGesture()
-  playTurnStart()
+export async function testSound() {
+  await initAudioOnGesture()
+  return playTurnStart()
 }
 
 export function unlockAudio() {
-  initAudioOnGesture()
+  return initAudioOnGesture()
 }

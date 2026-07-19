@@ -215,8 +215,8 @@ function onTimeout() {
 async function doAction(action) {
   if (timeUp.value || paused.value || locked.value || !gameStore.currentWord) return
 
-  if (action === 'guess') playGuess()
-  else playSkip()
+  if (action === 'guess') await playGuess()
+  else await playSkip()
 
   locked.value = true
 
@@ -236,7 +236,7 @@ async function doAction(action) {
 async function awardLastWord(teamId) {
   if (locked.value) return
   locked.value = true
-  playGuess()
+  await playGuess()
   try {
     await gameStore.resolveLastWord(teamId)
     pickingTeam.value = false
@@ -249,7 +249,7 @@ async function awardLastWord(teamId) {
 async function missLastWord() {
   if (locked.value) return
   locked.value = true
-  playSkip()
+  await playSkip()
   try {
     await gameStore.resolveLastWord(null)
     pickingTeam.value = false

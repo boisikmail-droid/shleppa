@@ -1,5 +1,5 @@
 <template>
-  <div id="app-root">
+  <div id="app-root" :class="{ 'app-root--vk': vkStore.inVk }">
     <div class="app-chrome">
       <AppPrefs />
       <ThemeSwitcher />
@@ -11,6 +11,9 @@
 <script setup>
 import ThemeSwitcher from './components/ThemeSwitcher.vue'
 import AppPrefs from './components/AppPrefs.vue'
+import { useVkStore } from './stores/vkStore'
+
+const vkStore = useVkStore()
 </script>
 
 <style scoped>
@@ -22,5 +25,10 @@ import AppPrefs from './components/AppPrefs.vue'
   display: flex;
   align-items: flex-start;
   gap: 8px;
+}
+
+/* В VK сверху своя панель — опускаем переключатели, чтобы не наезжали */
+.app-root--vk .app-chrome {
+  top: max(52px, calc(env(safe-area-inset-top) + 44px));
 }
 </style>

@@ -115,7 +115,7 @@ const cycleText = computed(() => {
 
 async function onReady() {
   if (gameStore.syncPhase) return
-  initAudioOnGesture()
+  await initAudioOnGesture()
   playTurnStart()
   try {
     await gameStore.startTurn()

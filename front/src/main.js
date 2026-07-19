@@ -4,6 +4,7 @@ import App from './App.vue'
 import router from './router'
 import { useVkStore } from './stores/vkStore'
 import { useThemeStore } from './stores/themeStore'
+import { bindAudioUnlockOnFirstGesture } from './services/timerSounds'
 import './assets/themes.css'
 import './assets/main.css'
 
@@ -19,6 +20,7 @@ const vkStore = useVkStore(pinia)
 
 function mount() {
   app.mount('#app')
+  bindAudioUnlockOnFirstGesture()
 }
 
 const boot = vkStore.bootstrap()
