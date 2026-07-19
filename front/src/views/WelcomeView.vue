@@ -68,15 +68,34 @@
       <p class="welcome__lead">
         Эрудиция, память, смех и общая волна — party на одном телефоне.
       </p>
-      <router-link class="welcome__cta" to="/setup">
-        <span class="welcome__cta-label">К настройкам игры</span>
-        <span class="welcome__cta-arrow" aria-hidden="true">→</span>
-      </router-link>
+      <div class="welcome__actions">
+        <router-link
+          v-if="resumePath"
+          class="welcome__cta welcome__cta--resume"
+          :to="resumePath"
+        >
+          <span class="welcome__cta-label">{{ resumeLabel }}</span>
+          <span class="welcome__cta-arrow" aria-hidden="true">→</span>
+        </router-link>
+        <router-link class="welcome__cta" :class="{ 'welcome__cta--secondary': !!resumePath }" to="/setup">
+          <span class="welcome__cta-label">{{ resumePath ? 'Новая игра' : 'К настройкам игры' }}</span>
+          <span class="welcome__cta-arrow" aria-hidden="true">→</span>
+        </router-link>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
+import { onMounted, ref } from 'vue'
+import api from '../services/api'
+import { useSessionStore } from '../stores/sessionStore'
+import { loadPendingFinish } from '../services/turnSync'
+
+const sessionStore = useSessionStore()
+const resumePath = ref(null)
+const resumeLabel = ref('Продолжить партию')
+
 const phrases = [
   'Белшок',
   'Анкгор-Ват',
@@ -122,6 +141,25 @@ function emberStyle(n) {
     '--dur': `${5 + (n % 4)}s`,
   }
 }
+
+onMounted(async () => {
+  const pending = loadPendingFinish()
+  const id = pending?.sessionId || sessionStore.sessionId
+  if (!id) return
+
+  try {
+    const { data } = await api.getSessionState(id)
+    if (data.status === 'finished') {
+      resumePath.value = `/results/${id}`
+      resumeLabel.value = 'Смотреть итоги'
+      return
+    }
+    resumePath.value = `/game/${id}`
+    resumeLabel.value = pending ? 'Доотправить ход' : 'Продолжить партию'
+  } catch {
+    sessionStore.clearSession()
+  }
+})
 </script>
 
 <style scoped>
@@ -342,12 +380,21 @@ function emberStyle(n) {
   animation: brandIn 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both;
 }
 
+.welcome__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 0.35rem;
+  animation: brandIn 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.26s both;
+}
+
 .welcome__cta {
   display: inline-flex;
   align-items: center;
   gap: 12px;
   align-self: flex-start;
-  margin-top: 0.35rem;
+  margin-top: 0;
   padding: 15px 22px;
   text-decoration: none;
   color: var(--btn-primary-text);
@@ -357,10 +404,20 @@ function emberStyle(n) {
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--gold-bright) 35%, transparent),
     0 10px 28px var(--btn-primary-glow);
-  animation:
-    brandIn 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.26s both,
-    ctaShimmer 4.5s ease-in-out infinite;
+  animation: ctaShimmer 4.5s ease-in-out infinite;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.welcome__cta--secondary {
+  color: var(--text);
+  background: transparent;
+  box-shadow: none;
+  border: 1px solid var(--border-strong);
+  animation: none;
+}
+
+.welcome__cta--resume {
+  animation: ctaShimmer 4.5s ease-in-out infinite;
 }
 
 .welcome__cta-label {

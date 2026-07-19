@@ -108,23 +108,70 @@ ssh-keygen -t ed25519 -f deploy_key -N ""
 
 ---
 
-## 4. Домен и HTTPS (опционально)
+## 4. Домен и HTTPS (Caddy + Let's Encrypt)
 
-Для продакшена лучше поставить Caddy или nginx на хосте + Let's Encrypt:
+Docker и Caddy **не могут оба** слушать порт 80. Схема:
+
+- Docker (`hat_web`) → `127.0.0.1:8080` (или `:8080`)
+- Caddy → `:80` + `:443` → `reverse_proxy localhost:8080`
+
+### DNS
+
+A-запись `shleppa.online` (и желательно `www`) → IP VPS.
+
+### Firewall
 
 ```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+```
+
+### Docker на 8080
+
+В `docker/.env`:
+
+```bash
+HTTP_PORT=8080
+```
+
+```bash
+cd /opt/hat
+docker compose -f docker/docker-compose.prod.yml up -d
+curl -I http://127.0.0.1:8080/
+```
+
+### Caddy (предпочтительно через apt, не snap)
+
+```bash
+# если стоял snap — убрать
+sudo snap remove caddy 2>/dev/null || true
+
+sudo apt update
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update
 sudo apt install -y caddy
 ```
 
 `/etc/caddy/Caddyfile`:
 
 ```
-your-domain.com {
-    reverse_proxy localhost:80
+shleppa.online, www.shleppa.online {
+    reverse_proxy localhost:8080
 }
 ```
 
-Тогда в `docker/.env` можно оставить `HTTP_PORT=80`, а снаружи будет HTTPS.
+```bash
+sudo systemctl enable --now caddy
+sudo systemctl reload caddy
+ss -tlnp | grep -E ':80|:443'
+curl -I https://shleppa.online/
+```
+
+В настройках VK Mini App URL должен быть `https://shleppa.online/`.
 
 ---
 

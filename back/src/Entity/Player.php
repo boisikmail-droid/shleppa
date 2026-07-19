@@ -22,6 +22,9 @@ class Player
     #[ORM\Column(length: 100)]
     private string $name = '';
 
+    #[ORM\Column(name: 'avatar_id', length: 32)]
+    private string $avatarId = 'm01';
+
     #[ORM\Column(name: 'order_index')]
     private int $orderIndex = 0;
 
@@ -50,6 +53,18 @@ class Player
     public function setName(string $name): static
     {
         $this->name = $name;
+
+        return $this;
+    }
+
+    public function getAvatarId(): string
+    {
+        return $this->avatarId;
+    }
+
+    public function setAvatarId(string $avatarId): static
+    {
+        $this->avatarId = $avatarId !== '' ? $avatarId : 'm01';
 
         return $this;
     }

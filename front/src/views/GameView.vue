@@ -1,5 +1,7 @@
 <template>
   <div class="game-container container">
+    <SyncOverlay :phase="gameStore.syncPhase" />
+
     <RoundTransition v-if="gameStore.showRoundTransition" :round="gameStore.round" :status="gameStore.status" />
 
     <WaitingScreen
@@ -15,7 +17,6 @@
 
     <CorrectionScreen
       v-else-if="gameStore.screen === 'correction'"
-      @submit="handleFinishTurn"
     />
 
     <ResultsView v-else-if="gameStore.screen === 'results' || gameStore.status === 'finished'" />
@@ -23,39 +24,16 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
 import { useGameStore } from '../stores/gameStore'
 import WaitingScreen from '../components/WaitingScreen.vue'
 import GameplayScreen from '../components/GameplayScreen.vue'
 import CorrectionScreen from '../components/CorrectionScreen.vue'
 import RoundTransition from '../components/RoundTransition.vue'
 import ResultsView from '../views/ResultsView.vue'
+import SyncOverlay from '../components/SyncOverlay.vue'
 
-const props = defineProps({ id: { type: [String, Number], required: true } })
+defineProps({ id: { type: [String, Number], required: true } })
 const gameStore = useGameStore()
-const route = useRoute()
-
-let pollInterval = null
-
-onMounted(async () => {
-  gameStore.sessionId = Number(props.id)
-  await gameStore.fetchGameState(props.id)
-
-  pollInterval = setInterval(async () => {
-    if (gameStore.screen === 'waiting' && !gameStore.isTurnActive) {
-      try {
-        await gameStore.fetchGameState(props.id)
-      } catch {
-        /* ignore polling errors */
-      }
-    }
-  }, 5000)
-})
-
-onUnmounted(() => {
-  if (pollInterval) clearInterval(pollInterval)
-})
 
 function handleGuess() {
   /* handled in GameplayScreen */
@@ -71,9 +49,5 @@ async function handleTimeout() {
     return
   }
   await gameStore.endTurnOrCorrect()
-}
-
-async function handleFinishTurn(corrections) {
-  await gameStore.finishTurn(corrections)
 }
 </script>

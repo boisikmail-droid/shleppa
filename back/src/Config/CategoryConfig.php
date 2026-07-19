@@ -32,24 +32,25 @@ final class CategoryConfig
      *
      * @var array<string, int>
      */
+    /** Все категории: 1–5 базовый пул, 6 — жёсткий. */
     public const MAX_LEVEL_BY_CATEGORY = [
-        'clothes' => 3,
-        'furniture' => 3,
-        'celebrities' => 3,
-        'sport' => 4,
-        'places' => 4,
-        'transport' => 4,
-        'animals' => 5,
-        'nature' => 5,
-        'movies' => 5,
-        'profession' => 5,
-        'feelings' => 5,
         'everyday' => 6,
         'food' => 6,
+        'animals' => 6,
+        'nature' => 6,
+        'movies' => 6,
+        'places' => 6,
+        'transport' => 6,
+        'clothes' => 6,
+        'furniture' => 6,
+        'profession' => 6,
         'school' => 6,
+        'celebrities' => 6,
+        'feelings' => 6,
+        'sport' => 6,
         'tech' => 6,
-        'phrases' => 5,
-        'random_phrases' => 5,
+        'phrases' => 6,
+        'random_phrases' => 6,
     ];
 
     public const MAX_LEVEL = 6;

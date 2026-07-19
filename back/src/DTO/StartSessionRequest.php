@@ -10,7 +10,7 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 class StartSessionRequest
 {
     /**
-     * @var list<array{name?: string, players?: list<string>, hat_id?: string}>
+     * @var list<array{name?: string, players?: list<string|array{name?: string, avatar_id?: string}>, hat_id?: string}>
      */
     #[Assert\Count(min: 2, max: 4)]
     public array $teams = [];
@@ -54,8 +54,12 @@ class StartSessionRequest
             }
 
             foreach ($players as $p) {
-                $p = trim((string) $p);
-                if ($p === '' || mb_strlen($p) > 100) {
+                if (is_array($p)) {
+                    $playerName = trim((string) ($p['name'] ?? ''));
+                } else {
+                    $playerName = trim((string) $p);
+                }
+                if ($playerName === '' || mb_strlen($playerName) > 100) {
                     $context->buildViolation('Имена игроков не должны быть пустыми.')
                         ->atPath('teams['.$i.'].players')
                         ->addViolation();

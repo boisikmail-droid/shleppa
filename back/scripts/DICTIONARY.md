@@ -7,20 +7,24 @@ python back/scripts/words/gen_phrases.py
 python back/scripts/sanitize_banks.py
 python back/scripts/merge_curated.py
 python back/scripts/inject_novel_words.py
+python back/scripts/relevel_banks.py   # L1–5 из текущего пула + curated L6
 python back/scripts/build_dictionary.py
 php bin/console app:import-words
 ```
+
+Уровни: **1–5** — весь существующий словарь, переразмеченный по сложности; **6** — отдельный жёсткий curated-банк (`words/hard_l6.py`).
+Все категории поддерживают уровни 1–6.
 
 ### Категории фраз (3–4 слова)
 
 | Slug | Название | Суть |
 |------|----------|------|
 | `phrases` | Адекватные словосочетания | Реальные бытовые / рабочие / академические фразы |
-| `random_phrases` | Случайные словосочетания | Выдуманные, но лексически связанные |
+| `random_phrases` | Случайные словосочетания | Абсурдные, но согласованные по роду сцены (без склейки словарей) |
 
-Уровни 1–5. Генератор: `back/scripts/words/gen_phrases.py`.
-Ограничение: знаменательное слово на уровне ≤2 раза (`random_phrases`) / ≤3 (`phrases`).
-`phrases` — только осмысленные curated + семантические шаблоны (без склейки случайных существительных).
+Уровни 1–6. Генератор адекватных: `gen_phrases.py`. Случайных: `rewrite_random_phrases.py` (только внутритематические пулы + согласование).
+Ограничение: знаменательное слово на уровне ≤2–3 раза.
+`phrases` — только осмысленные curated + семантические шаблоны.
 Предлоги `в/на/с/...` не считаются.
 
 ### Отдельные шаги

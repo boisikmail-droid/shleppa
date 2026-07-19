@@ -16,7 +16,7 @@
 <script setup>
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { createTimer } from '../services/timer'
-import { playFiveSecondWarning, playTimeUp } from '../services/timerSounds'
+import { playTenSecondWarning, playCountdownTick, playTimeUp } from '../services/timerSounds'
 import { vibrate, VIBRATE } from '../services/vibrate'
 
 const props = defineProps({
@@ -28,8 +28,8 @@ const props = defineProps({
 const emit = defineEmits(['timeout', 'tick'])
 
 const remaining = ref(props.duration)
-const warnedAt5 = ref(false)
 const warnedAt10 = ref(false)
+const lastCountdownSecond = ref(null)
 
 const formatted = computed(() => {
   const m = Math.floor(remaining.value / 60)
@@ -51,13 +51,14 @@ function handleTick(r) {
 
   if (r === 10 && !warnedAt10.value) {
     warnedAt10.value = true
+    playTenSecondWarning()
     vibrate(VIBRATE.warn10)
   }
 
-  if (r === 5 && !warnedAt5.value) {
-    warnedAt5.value = true
-    playFiveSecondWarning()
-    vibrate(VIBRATE.warn5)
+  if (r >= 1 && r <= 5 && lastCountdownSecond.value !== r) {
+    lastCountdownSecond.value = r
+    playCountdownTick(r)
+    vibrate(VIBRATE.tick)
   }
 }
 
@@ -75,16 +76,16 @@ watch(
   (active) => {
     if (active) {
       remaining.value = props.duration
-      warnedAt5.value = false
       warnedAt10.value = false
+      lastCountdownSecond.value = null
       timer.start(props.duration)
       if (props.paused) {
         timer.pause()
       }
     } else {
       timer.stop()
-      warnedAt5.value = false
       warnedAt10.value = false
+      lastCountdownSecond.value = null
     }
   },
   { immediate: true }

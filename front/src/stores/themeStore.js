@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { DEFAULT_THEME, THEME_STORAGE_KEY, THEMES } from '../constants/themes'
+import { loadThemeFonts } from '../services/themeFonts'
 
 function readStoredTheme() {
   try {
@@ -15,6 +16,7 @@ function readStoredTheme() {
 
 function applyTheme(themeId) {
   document.documentElement.setAttribute('data-theme', themeId)
+  loadThemeFonts(themeId)
 }
 
 export const useThemeStore = defineStore('theme', {

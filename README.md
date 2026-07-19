@@ -74,11 +74,9 @@ docker exec -it hat_php php bin/console app:import-words
 
 - `POST /session/start` — создать игру
 - `GET /session/{id}/state` — состояние игры
-- `GET /game/next-word` — следующее слово
-- `POST /game/turn/start` — начать ход
-- `POST /game/action` — угадано / пропуск
-- `POST /game/turn/finish` — завершить ход с коррекцией
-- `POST /round/next` — принудительный переход раунда
+- `GET /session/{id}/recap` — итоги партии
+- `POST /game/turn/start` — начать ход (пул слов + сложность)
+- `POST /game/turn/finish` — синхронизировать итоги хода (actions, corrections, last_word)
 
 ## Переменные окружения
 

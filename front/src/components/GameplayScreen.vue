@@ -11,6 +11,10 @@
     </p>
 
     <div class="gameplay-team-row">
+      <PlayerAvatar
+        :avatar-id="gameStore.currentPlayer?.avatar_id || 'm01'"
+        size="md"
+      />
       <TeamHat
         :hat-id="gameStore.currentTeam?.hat_id || 'tophat'"
         size="sm"
@@ -147,13 +151,19 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useGameStore } from '../stores/gameStore'
 import { getRoundTitle } from '../composables/useRoundTitle'
 import Timer from './Timer.vue'
 import WordCard from './WordCard.vue'
 import TeamHat from './TeamHat.vue'
+import PlayerAvatar from './PlayerAvatar.vue'
 import { playGuess, playSkip } from '../services/timerSounds'
+import {
+  requestWakeLock,
+  releaseWakeLock,
+  bindWakeLockVisibility,
+} from '../services/wakeLock'
 
 const emit = defineEmits(['guess', 'skip', 'timeout'])
 
@@ -162,6 +172,18 @@ const locked = ref(false)
 const paused = ref(false)
 const timeUp = ref(false)
 const pickingTeam = ref(false)
+
+let unbindWake = null
+
+onMounted(() => {
+  requestWakeLock()
+  unbindWake = bindWakeLockVisibility(() => !paused.value && !timeUp.value)
+})
+
+onUnmounted(() => {
+  if (unbindWake) unbindWake()
+  releaseWakeLock()
+})
 
 const roundTitle = computed(() =>
   getRoundTitle(gameStore.status, gameStore.round)

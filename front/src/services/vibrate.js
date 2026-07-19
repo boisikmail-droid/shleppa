@@ -1,4 +1,15 @@
+const STORAGE_KEY = 'hat-vibrate-enabled'
+
+export function isVibrateEnabled() {
+  return localStorage.getItem(STORAGE_KEY) !== 'false'
+}
+
+export function setVibrateEnabled(enabled) {
+  localStorage.setItem(STORAGE_KEY, enabled ? 'true' : 'false')
+}
+
 export function vibrate(pattern = 40) {
+  if (!isVibrateEnabled()) return
   try {
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
       navigator.vibrate(pattern)

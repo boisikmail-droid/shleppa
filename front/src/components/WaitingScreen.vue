@@ -15,9 +15,16 @@
           <span class="waiting__focus-label">Команда</span>
           <span class="waiting__focus-name">{{ gameStore.currentTeam?.name }}</span>
         </p>
-        <p class="waiting__focus-row">
-          <span class="waiting__focus-label">Игрок</span>
-          <span class="waiting__focus-name waiting__focus-name--player">{{ gameStore.currentPlayer?.name }}</span>
+        <p class="waiting__focus-row waiting__focus-row--player">
+          <PlayerAvatar
+            class="waiting__player-avatar"
+            :avatar-id="gameStore.currentPlayer?.avatar_id || 'm01'"
+            size="lg"
+          />
+          <span class="waiting__focus-player-meta">
+            <span class="waiting__focus-label">Игрок</span>
+            <span class="waiting__focus-name waiting__focus-name--player">{{ gameStore.currentPlayer?.name }}</span>
+          </span>
         </p>
       </div>
 
@@ -40,8 +47,18 @@
       <p class="stat-row__hint">После {{ cycleLength }} угаданных слов цикл уровней начнётся снова</p>
     </div>
 
-    <button class="button-primary" @click="onReady">Готов</button>
-    <p class="waiting__sound-hint">При нажатии «Готов» прозвучит сигнал старта. За 5 секунд до конца — предупреждение.</p>
+    <div v-if="gameStore.syncError && !gameStore.syncPhase" class="error-msg">
+      {{ gameStore.syncError }}
+    </div>
+
+    <button
+      class="button-primary"
+      :disabled="!!gameStore.syncPhase"
+      @click="onReady"
+    >
+      {{ gameStore.syncPhase === 'starting' ? 'Загрузка…' : 'Готов' }}
+    </button>
+    <p class="waiting__sound-hint">При нажатии «Готов» прозвучит сигнал старта. За 10 секунд — предупреждение, последние 5 секунд — обратный отсчёт.</p>
 
     <div class="card" v-if="gameStore.teams.length">
       <h3>Счёт</h3>
@@ -55,19 +72,28 @@
         </li>
       </ul>
     </div>
+
+    <button type="button" class="button-secondary waiting__leave" @click="leaveGame">
+      Новая игра
+    </button>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useGameStore } from '../stores/gameStore'
+import { useSessionStore } from '../stores/sessionStore'
 import { getRoundTitle } from '../composables/useRoundTitle'
 import { MAX_DIFFICULTY, difficultyLabel } from '../constants/difficulty'
 import DifficultyStars from './DifficultyStars.vue'
 import TeamHat from './TeamHat.vue'
+import PlayerAvatar from './PlayerAvatar.vue'
 import { initAudioOnGesture, playTurnStart } from '../services/timerSounds'
 
+const router = useRouter()
 const gameStore = useGameStore()
+const sessionStore = useSessionStore()
 
 const roundTitle = computed(() =>
   getRoundTitle(gameStore.status, gameStore.round)
@@ -88,9 +114,21 @@ const cycleText = computed(() => {
 })
 
 async function onReady() {
+  if (gameStore.syncPhase) return
   initAudioOnGesture()
   playTurnStart()
-  await gameStore.startTurn()
+  try {
+    await gameStore.startTurn()
+  } catch {
+    /* syncError в store */
+  }
+}
+
+function leaveGame() {
+  if (!confirm('Завершить текущую партию и начать новую?')) return
+  gameStore.leaveToSetup()
+  sessionStore.clearSession()
+  router.push('/setup')
 }
 </script>
 
@@ -133,6 +171,25 @@ async function onReady() {
   gap: 2px;
   margin: 0;
   width: 100%;
+}
+
+.waiting__focus-row--player {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: left;
+}
+
+.waiting__player-avatar {
+  border: 1px solid var(--border);
+}
+
+.waiting__focus-player-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .waiting__focus-label {
@@ -227,5 +284,10 @@ async function onReady() {
   color: var(--gold-bright);
   font-family: var(--font-display);
   font-size: 1.25rem;
+}
+
+.waiting__leave {
+  width: 100%;
+  margin-top: 20px;
 }
 </style>

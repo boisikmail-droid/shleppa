@@ -305,7 +305,7 @@ input[type="number"]:focus {
 }
 
 .word-card {
-  padding: 40px 24px;
+  padding: 40px 16px;
   text-align: center;
   border-radius: var(--radius-lg);
   margin: 24px 0;
@@ -314,6 +314,9 @@ input[type="number"]:focus {
   box-shadow: var(--shadow), inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent);
   position: relative;
   overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .word-card::before {
@@ -332,6 +335,9 @@ input[type="number"]:focus {
   margin: 0;
   letter-spacing: 0.04em;
   position: relative;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .stars {

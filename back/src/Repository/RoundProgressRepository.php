@@ -197,4 +197,45 @@ class RoundProgressRepository extends ServiceEntityRepository
             ->getQuery()
             ->getOneOrNullResult();
     }
+
+    /**
+     * Неотгаданные слова раунда для клиентского хода.
+     *
+     * @param int[] $wordIds
+     *
+     * @return list<array{id: int, text: string, difficulty: int, category: string}>
+     */
+    public function findUnguessedWordSnapshots(int $sessionId, int $round, array $wordIds): array
+    {
+        if ($wordIds === []) {
+            return [];
+        }
+
+        $results = $this->createQueryBuilder('rp')
+            ->join('rp.word', 'w')
+            ->addSelect('w')
+            ->where('rp.session = :sessionId')
+            ->andWhere('rp.round = :round')
+            ->andWhere('rp.isGuessedInThisRound = false')
+            ->andWhere('w.id IN (:wordIds)')
+            ->setParameter('sessionId', $sessionId)
+            ->setParameter('round', $round)
+            ->setParameter('wordIds', $wordIds)
+            ->getQuery()
+            ->getResult();
+
+        $out = [];
+        foreach ($results as $rp) {
+            /** @var RoundProgress $rp */
+            $word = $rp->getWord();
+            $out[] = [
+                'id' => (int) $word->getId(),
+                'text' => $word->getText(),
+                'difficulty' => $word->getDifficulty(),
+                'category' => $word->getCategory(),
+            ];
+        }
+
+        return $out;
+    }
 }

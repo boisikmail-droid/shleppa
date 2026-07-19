@@ -3,13 +3,8 @@
 namespace App\Controller;
 
 use App\DTO\StartSessionRequest;
-use App\Entity\GameSession;
-use App\Entity\Team;
 use App\Repository\GameSessionRepository;
-use App\Repository\TeamRepository;
 use App\Service\GameSessionService;
-use App\Service\RoundTransitionManager;
-use App\Service\WordSelector;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -23,9 +18,6 @@ class ApiController extends AbstractController
     public function __construct(
         private GameSessionService $gameSessionService,
         private GameSessionRepository $sessionRepository,
-        private TeamRepository $teamRepository,
-        private WordSelector $wordSelector,
-        private RoundTransitionManager $roundTransitionManager,
         private ValidatorInterface $validator,
     ) {
     }
@@ -85,12 +77,23 @@ class ApiController extends AbstractController
 
         $normalizedTeams = [];
         foreach ($dto->teams as $team) {
+            $players = [];
+            foreach ($team['players'] ?? [] as $p) {
+                if (is_array($p)) {
+                    $players[] = [
+                        'name' => trim((string) ($p['name'] ?? '')),
+                        'avatar_id' => (string) ($p['avatar_id'] ?? 'm01'),
+                    ];
+                } else {
+                    $players[] = [
+                        'name' => trim((string) $p),
+                        'avatar_id' => 'm01',
+                    ];
+                }
+            }
             $normalizedTeams[] = [
                 'name' => trim((string) $team['name']),
-                'players' => array_values(array_map(
-                    static fn ($p) => trim((string) $p),
-                    $team['players'] ?? []
-                )),
+                'players' => array_values($players),
                 'hat_id' => isset($team['hat_id']) ? (string) $team['hat_id'] : 'tophat',
             ];
         }
@@ -137,49 +140,6 @@ class ApiController extends AbstractController
         return $this->json($this->gameSessionService->getRecap($session));
     }
 
-    #[Route('/game/next-word', name: 'game_next_word', methods: ['GET'])]
-    public function nextWord(Request $request): JsonResponse
-    {
-        $sessionId = (int) $request->query->get('session_id');
-        $teamId = (int) $request->query->get('team_id');
-        $round = (int) $request->query->get('round');
-        $excludeRaw = $request->query->get('exclude_word_ids', '');
-        $excludeWordIds = array_values(array_filter(array_map(
-            'intval',
-            explode(',', (string) $excludeRaw)
-        )));
-
-        $session = $this->sessionRepository->find($sessionId);
-        $team = $this->teamRepository->find($teamId);
-
-        if (!$session || !$team) {
-            return $this->json(['error' => 'Not found'], Response::HTTP_NOT_FOUND);
-        }
-
-        $wordData = $this->wordSelector->getNextWordData($session, $team, $round, $excludeWordIds);
-        if (!$wordData) {
-            $remaining = $this->wordSelector->countRemaining($session, $round);
-
-            return $this->json([
-                'finished' => true,
-                'message' => $remaining > 0
-                    ? 'No more unused words this turn'
-                    : 'No more words in this round',
-                'remaining_words' => $remaining,
-            ]);
-        }
-
-        $word = $wordData['word'];
-
-        return $this->json([
-            'word_id' => $word->getId(),
-            'word_text' => $word->getText(),
-            'difficulty' => $word->getDifficulty(),
-            'finished' => false,
-            'remaining_words' => $wordData['remaining_words'],
-        ]);
-    }
-
     #[Route('/game/turn/start', name: 'game_turn_start', methods: ['POST'])]
     public function startTurn(Request $request): JsonResponse
     {
@@ -194,73 +154,12 @@ class ApiController extends AbstractController
 
         try {
             $turn = $this->gameSessionService->startTurn($session, $playerId);
+            $payload = $this->gameSessionService->getTurnStartPayload($session, $turn);
         } catch (\InvalidArgumentException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
 
-        return $this->json(['turn_id' => $turn->getId()]);
-    }
-
-    #[Route('/game/action', name: 'game_action', methods: ['POST'])]
-    public function gameAction(Request $request): JsonResponse
-    {
-        $data = json_decode($request->getContent(), true) ?? [];
-        $sessionId = (int) ($data['session_id'] ?? 0);
-        $playerId = (int) ($data['player_id'] ?? 0);
-        $wordId = (int) ($data['word_id'] ?? 0);
-        $action = $data['action'] ?? '';
-        $turnId = isset($data['turn_id']) ? (int) $data['turn_id'] : null;
-
-        if (!in_array($action, ['guess', 'skip'], true)) {
-            return $this->json(['error' => 'Invalid action'], Response::HTTP_BAD_REQUEST);
-        }
-
-        $session = $this->sessionRepository->find($sessionId);
-        if (!$session) {
-            return $this->json(['error' => 'Session not found'], Response::HTTP_NOT_FOUND);
-        }
-
-        try {
-            $this->gameSessionService->processAction($session, $playerId, $wordId, $action, $turnId);
-        } catch (\InvalidArgumentException $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
-        }
-
-        return $this->json([
-            'success' => true,
-            'word_id' => $wordId,
-            'action' => $action,
-        ]);
-    }
-
-    #[Route('/game/last-word', name: 'game_last_word', methods: ['POST'])]
-    public function resolveLastWord(Request $request): JsonResponse
-    {
-        $data = json_decode($request->getContent(), true) ?? [];
-        $sessionId = (int) ($data['session_id'] ?? 0);
-        $turnId = (int) ($data['turn_id'] ?? 0);
-        $wordId = (int) ($data['word_id'] ?? 0);
-        $awardTeamId = array_key_exists('team_id', $data) && $data['team_id'] !== null
-            ? (int) $data['team_id']
-            : null;
-
-        $session = $this->sessionRepository->find($sessionId);
-        if (!$session) {
-            return $this->json(['error' => 'Session not found'], Response::HTTP_NOT_FOUND);
-        }
-
-        try {
-            $result = $this->gameSessionService->resolveLastWord(
-                $session,
-                $turnId,
-                $wordId,
-                $awardTeamId,
-            );
-        } catch (\InvalidArgumentException $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
-        }
-
-        return $this->json(array_merge(['success' => true], $result));
+        return $this->json($payload);
     }
 
     #[Route('/game/turn/finish', name: 'game_turn_finish', methods: ['POST'])]
@@ -270,6 +169,38 @@ class ApiController extends AbstractController
         $sessionId = (int) ($data['session_id'] ?? 0);
         $turnId = (int) ($data['turn_id'] ?? 0);
         $corrections = $data['corrections'] ?? [];
+        $actions = $data['actions'] ?? [];
+        $lastWord = null;
+        if (isset($data['last_word']) && is_array($data['last_word'])) {
+            $lw = $data['last_word'];
+            $lastWord = [
+                'word_id' => (int) ($lw['word_id'] ?? 0),
+                'award_team_id' => array_key_exists('award_team_id', $lw) && $lw['award_team_id'] !== null
+                    ? (int) $lw['award_team_id']
+                    : null,
+            ];
+            if ($lastWord['word_id'] <= 0) {
+                $lastWord = null;
+            }
+        }
+
+        if (!is_array($corrections)) {
+            $corrections = [];
+        }
+        if (!is_array($actions)) {
+            $actions = [];
+        }
+
+        $normalizedActions = [];
+        foreach ($actions as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $normalizedActions[] = [
+                'word_id' => (int) ($item['word_id'] ?? 0),
+                'action' => (string) ($item['action'] ?? ''),
+            ];
+        }
 
         $session = $this->sessionRepository->find($sessionId);
         if (!$session) {
@@ -277,34 +208,17 @@ class ApiController extends AbstractController
         }
 
         try {
-            $result = $this->gameSessionService->finishTurn($session, $turnId, $corrections);
+            $result = $this->gameSessionService->finishTurn(
+                $session,
+                $turnId,
+                $corrections,
+                $normalizedActions,
+                $lastWord,
+            );
         } catch (\InvalidArgumentException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
 
         return $this->json(array_merge(['success' => true], $result));
-    }
-
-    #[Route('/round/next', name: 'round_next', methods: ['POST'])]
-    public function nextRound(Request $request): JsonResponse
-    {
-        $data = json_decode($request->getContent(), true) ?? [];
-        $sessionId = (int) ($data['session_id'] ?? 0);
-
-        $session = $this->sessionRepository->find($sessionId);
-        if (!$session) {
-            return $this->json(['error' => 'Session not found'], Response::HTTP_NOT_FOUND);
-        }
-
-        try {
-            $session = $this->roundTransitionManager->advanceToNextRound($session);
-        } catch (\InvalidArgumentException $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
-        }
-
-        return $this->json([
-            'success' => true,
-            'new_status' => $session->getStatus(),
-        ]);
     }
 }

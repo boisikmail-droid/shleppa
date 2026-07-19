@@ -60,10 +60,10 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
 
 <style scoped>
 .theme-switcher {
-  position: fixed;
-  top: max(12px, env(safe-area-inset-top));
-  right: max(12px, env(safe-area-inset-right));
-  z-index: 50;
+  position: relative;
+  top: auto;
+  right: auto;
+  z-index: auto;
 }
 
 .theme-switcher__toggle {

@@ -5,6 +5,8 @@
       <h2 class="correction__player">{{ gameStore.currentPlayer?.name }}</h2>
     </header>
 
+    <div v-if="gameStore.syncError" class="error-msg">{{ gameStore.syncError }}</div>
+
     <div class="card">
       <table class="correction-table">
         <thead>
@@ -28,6 +30,7 @@
           </tr>
         </tbody>
       </table>
+      <p v-if="!items.length" class="correction__empty">За ход не было слов — можно продолжить.</p>
     </div>
 
     <div class="hint-box">
@@ -37,8 +40,18 @@
       «Пропуск» и не угадали — галочку снять ({{ skipHint }})
     </div>
 
-    <button class="button-primary" :disabled="loading" @click="submit">
-      {{ loading ? 'Отправка...' : 'Дальше' }}
+    <button
+      class="button-primary"
+      :disabled="!!gameStore.syncPhase"
+      @click="submit"
+    >
+      {{
+        gameStore.syncPhase === 'finishing'
+          ? 'Отправка...'
+          : gameStore.syncError
+            ? 'Отправить снова'
+            : 'Дальше'
+      }}
     </button>
   </div>
 </template>
@@ -47,9 +60,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useGameStore } from '../stores/gameStore'
 
-const emit = defineEmits(['submit'])
 const gameStore = useGameStore()
-const loading = ref(false)
 
 const items = ref([])
 
@@ -67,15 +78,15 @@ onMounted(() => {
 })
 
 async function submit() {
-  loading.value = true
+  if (gameStore.syncPhase) return
   try {
     const corrections = items.value.map((item) => ({
       word_id: item.word_id,
       checked: item.checked,
     }))
-    emit('submit', corrections)
-  } finally {
-    loading.value = false
+    await gameStore.finishTurn(corrections)
+  } catch {
+    /* syncError в store */
   }
 }
 </script>
@@ -103,6 +114,13 @@ async function submit() {
   letter-spacing: 0.06em;
   margin: 0;
   color: var(--gold);
+}
+
+.correction__empty {
+  margin: 12px 0 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
 }
 
 .status--ok {

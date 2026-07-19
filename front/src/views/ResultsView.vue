@@ -35,11 +35,14 @@
       <div v-if="recap.players?.length" class="recap__block">
         <h3 class="recap__h">Игроки</h3>
         <ul class="recap__list">
-          <li v-for="p in recap.players" :key="p.id">
-            <strong>{{ p.name }}</strong>
-            <span class="recap__meta">{{ p.team_name }}</span>
-            — {{ p.guessed }} угадано / {{ p.skipped }} пропуск
-            <span class="recap__net">({{ p.net >= 0 ? '+' : '' }}{{ p.net }})</span>
+          <li v-for="p in recap.players" :key="p.id" class="recap__player">
+            <PlayerAvatar :avatar-id="p.avatar_id || 'm01'" size="sm" />
+            <span class="recap__player-text">
+              <strong>{{ p.name }}</strong>
+              <span class="recap__meta">{{ p.team_name }}</span>
+              — {{ p.guessed }} угадано / {{ p.skipped }} пропуск
+              <span class="recap__net">({{ p.net >= 0 ? '+' : '' }}{{ p.net }})</span>
+            </span>
           </li>
         </ul>
       </div>
@@ -56,7 +59,12 @@
 
     <p v-else-if="loadingRecap" class="recap__loading">Загружаем историю…</p>
 
-    <button class="button-primary" @click="newGame">Новая игра</button>
+    <div class="results__actions">
+      <button class="button-primary" :disabled="sharing" @click="shareResults">
+        {{ shareLabel }}
+      </button>
+      <button class="button-secondary" @click="newGame">Новая игра</button>
+    </div>
   </div>
 </template>
 
@@ -66,6 +74,9 @@ import { useRouter } from 'vue-router'
 import api from '../services/api'
 import { useGameStore } from '../stores/gameStore'
 import { useSessionStore } from '../stores/sessionStore'
+import PlayerAvatar from '../components/PlayerAvatar.vue'
+import { buildShareText, shareGameResult } from '../services/share'
+import { isRunningInVk } from '../services/vk'
 
 const props = defineProps({ id: { type: [String, Number], default: null } })
 
@@ -76,6 +87,8 @@ const sessionStore = useSessionStore()
 const recap = ref(null)
 const loadingRecap = ref(false)
 const loadError = ref('')
+const sharing = ref(false)
+const shareHint = ref('')
 
 const teams = computed(() => {
   if (recap.value?.teams?.length) {
@@ -88,6 +101,12 @@ const teams = computed(() => {
 const winnerIndex = computed(() => {
   if (!teams.value.length) return 0
   return 0
+})
+
+const shareLabel = computed(() => {
+  if (sharing.value) return 'Открываем…'
+  if (shareHint.value) return shareHint.value
+  return isRunningInVk() ? 'Поделиться в VK' : 'Поделиться'
 })
 
 async function loadRecap(sessionId) {
@@ -108,6 +127,27 @@ function newGame() {
   gameStore.resetGame()
   sessionStore.clearSession()
   router.push('/setup')
+}
+
+async function shareResults() {
+  sharing.value = true
+  shareHint.value = ''
+  try {
+    const text = buildShareText({
+      teams: teams.value,
+      highlights: recap.value?.highlights || [],
+      rounds: recap.value?.rounds || [],
+    })
+    const result = await shareGameResult(text)
+    if (result.ok && result.mode === 'clipboard') {
+      shareHint.value = 'Скопировано'
+      setTimeout(() => {
+        shareHint.value = ''
+      }, 2000)
+    }
+  } finally {
+    sharing.value = false
+  }
 }
 
 onMounted(() => {
@@ -134,6 +174,13 @@ watch(
   font-size: 3rem;
   margin-bottom: 8px;
   filter: drop-shadow(0 0 20px var(--title-glow));
+}
+
+.results__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
 }
 
 .recap {
@@ -165,6 +212,16 @@ watch(
   border-bottom: 1px solid var(--table-line);
   font-size: 0.95rem;
   color: var(--text);
+}
+
+.recap__player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.recap__player-text {
+  min-width: 0;
 }
 
 .recap__meta {

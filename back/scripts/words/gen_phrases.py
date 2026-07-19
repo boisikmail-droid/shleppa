@@ -1087,12 +1087,6 @@ def write_bank(name: str, levels: dict[int, list[str]], max_occ: int = MAX_OCC) 
 def main() -> None:
     quotas = {1: 80, 2: 140, 3: 180, 4: 160, 5: 90}  # = 650
 
-    import subprocess
-    subprocess.run(
-        [sys.executable, str(HERE / "build_phrase_lexicon.py")],
-        check=False,
-    )
-
     print("=== phrases (quality only, no lexicon glue) ===")
     real_pools = expand_real_rotated()
     real_out = fill_category(
@@ -1100,19 +1094,12 @@ def main() -> None:
     )
     write_bank("phrases", real_out, max_occ=MAX_OCC_PHRASES)
 
-    print("=== random_phrases ===")
-    themes = build_random_themes()
-    clean_themes: dict[int, tuple] = {}
-    for lvl, (adj, noun, verb, adv) in themes.items():
-        noun = [n for n in noun if not is_junk_token(n)]
-        adj = [a for a in adj if not is_junk_token(a)]
-        clean_themes[lvl] = (adj, noun, verb, adv)
-        print(f"  cleaned L{lvl}: noun {len(themes[lvl][1])}->{len(noun)}")
-    rnd_pools = {lvl: list(CURATED_RANDOM.get(lvl, [])) for lvl in range(1, 6)}
-    rnd_out = fill_category(
-        rnd_pools, quotas, slot_themes=clean_themes, curated_first=CURATED_RANDOM, max_occ=MAX_OCC
-    )
-    write_bank("random_phrases", rnd_out, max_occ=MAX_OCC)
+    print("=== random_phrases (scene-coherent rewrite) ===")
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
+    import rewrite_random_phrases as rrp
+    rrp.main()
+    # L1-6 written by rewrite_random_phrases
 
 
 if __name__ == "__main__":

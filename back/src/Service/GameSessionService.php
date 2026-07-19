@@ -31,14 +31,13 @@ class GameSessionService
         private GameTurnRepository $gameTurnRepository,
         private TurnLogRepository $turnLogRepository,
         private NextPlayerCalculator $nextPlayerCalculator,
-        private WordSelector $wordSelector,
         private ScoreCalculator $scoreCalculator,
         private RoundTransitionManager $roundTransitionManager,
     ) {
     }
 
     /**
-     * @param list<array{name: string, players: list<string>, hat_id?: string}> $teams
+     * @param list<array{name: string, players: list<string|array{name?: string, avatar_id?: string}>, hat_id?: string}> $teams
      * @param int[]                                                              $difficulties
      * @param string[]                                                           $categories
      */
@@ -83,7 +82,7 @@ class GameSessionService
             $createdTeams[] = $this->createTeam(
                 $session,
                 (string) $teamData['name'],
-                array_map('strval', $teamData['players'] ?? []),
+                $teamData['players'] ?? [],
                 isset($teamData['hat_id']) ? (string) $teamData['hat_id'] : 'tophat',
             );
         }
@@ -132,8 +131,8 @@ class GameSessionService
         return $session;
     }
 
-    /** @param string[] $playerNames */
-    private function createTeam(GameSession $session, string $name, array $playerNames, string $hatId = 'tophat'): Team
+    /** @param list<string|array{name?: string, avatar_id?: string}> $playersData */
+    private function createTeam(GameSession $session, string $name, array $playersData, string $hatId = 'tophat'): Team
     {
         $team = new Team();
         $team->setSession($session);
@@ -141,10 +140,19 @@ class GameSessionService
         $team->setHatId($hatId !== '' ? $hatId : 'tophat');
         $session->addTeam($team);
 
-        foreach ($playerNames as $index => $playerName) {
+        foreach ($playersData as $index => $playerData) {
+            if (is_array($playerData)) {
+                $playerName = trim((string) ($playerData['name'] ?? ''));
+                $avatarId = (string) ($playerData['avatar_id'] ?? 'm01');
+            } else {
+                $playerName = trim((string) $playerData);
+                $avatarId = 'm01';
+            }
+
             $player = new Player();
             $player->setTeam($team);
-            $player->setName(trim($playerName));
+            $player->setName($playerName);
+            $player->setAvatarId($avatarId);
             $player->setOrderIndex($index);
             $team->addPlayer($player);
             $this->entityManager->persist($player);
@@ -232,6 +240,56 @@ class GameSessionService
         $this->entityManager->flush();
 
         return $turn;
+    }
+
+    /**
+     * Снимок шляпы и сложности для клиентского хода.
+     *
+     * @return array{
+     *   turn_id: int|null,
+     *   words: list<array{id: int, text: string, difficulty: int, category: string}>,
+     *   remaining_words: int,
+     *   difficulty_cycle: int[],
+     *   team_difficulty_state: array{
+     *     current_difficulty: int,
+     *     words_guessed_in_cycle: int,
+     *     next_reset_at: int
+     *   }|null
+     * }
+     */
+    public function getTurnStartPayload(GameSession $session, GameTurn $turn): array
+    {
+        $round = $session->getRoundNumber();
+        $cycle = $session->getDifficultyCycle();
+        $words = $this->roundProgressRepository->findUnguessedWordSnapshots(
+            (int) $session->getId(),
+            $round,
+            $session->getWordsData()
+        );
+
+        $team = $turn->getTeam();
+        $difficultyState = null;
+        $state = $this->teamDifficultyStateRepository->findBySessionTeamRound(
+            (int) $session->getId(),
+            (int) $team->getId(),
+            $round
+        );
+        if ($state) {
+            $difficultyState = [
+                'current_difficulty' => $state->getCurrentDifficulty(),
+                'words_guessed_in_cycle' => $state->getWordsGuessedInCycle(),
+                'next_reset_at' => count($cycle),
+            ];
+        }
+
+        return [
+            'turn_id' => $turn->getId(),
+            'words' => $words,
+            'remaining_words' => count($words),
+            'difficulty_cycle' => $cycle,
+            'selected_difficulties' => $session->getSelectedDifficulties(),
+            'team_difficulty_state' => $difficultyState,
+        ];
     }
 
     public function processAction(
@@ -377,17 +435,23 @@ class GameSessionService
     }
 
     /**
-     * @param array<int, array{word_id: int, checked: bool}> $correctionsList
+     * Завершение хода: клиент присылает лог действий + коррекции (+ опционально last word).
+     *
+     * @param array<int, array{word_id: int, checked: bool}>                  $correctionsList
+     * @param list<array{word_id: int, action: string}>                       $actions
+     * @param array{word_id: int, award_team_id: int|null}|null               $lastWord
      */
-    public function finishTurn(GameSession $session, int $turnId, array $correctionsList): array
-    {
-        $turnData = $this->turnLogRepository->findTurnByIdWithWords($turnId);
-        if (!$turnData) {
+    public function finishTurn(
+        GameSession $session,
+        int $turnId,
+        array $correctionsList,
+        array $actions = [],
+        ?array $lastWord = null,
+    ): array {
+        $turn = $this->gameTurnRepository->find($turnId);
+        if (!$turn) {
             throw new \InvalidArgumentException('Turn not found');
         }
-
-        $turn = $turnData['turn'];
-        $logs = $turnData['logs'];
 
         if ($turn->getSession()->getId() !== $session->getId()) {
             throw new \InvalidArgumentException('Turn does not belong to session');
@@ -397,9 +461,35 @@ class GameSessionService
             throw new \InvalidArgumentException('Turn already finished');
         }
 
+        if ($session->getStatus() === GameSession::STATUS_FINISHED) {
+            throw new \InvalidArgumentException('Game is finished');
+        }
+
+        // Клиентский ход: создаём TurnLog из actions, если логов ещё нет
+        if ($actions !== [] && $turn->getTurnLogs()->isEmpty()) {
+            $this->applyClientActions($session, $turn, $actions);
+        }
+
+        $turnData = $this->turnLogRepository->findTurnByIdWithWords($turnId);
+        if (!$turnData) {
+            throw new \InvalidArgumentException('Turn not found');
+        }
+
+        $logs = $turnData['logs'];
+
         $corrections = [];
         foreach ($correctionsList as $item) {
             $corrections[(int) $item['word_id']] = $item;
+        }
+
+        // Если коррекции не пришли — считаем исходный статус действия верным
+        if ($corrections === [] && $logs !== []) {
+            foreach ($logs as $log) {
+                $corrections[(int) $log->getWord()->getId()] = [
+                    'word_id' => (int) $log->getWord()->getId(),
+                    'checked' => $log->getStatus() === TurnLog::STATUS_GUESSED,
+                ];
+            }
         }
 
         $team = $turn->getTeam();
@@ -447,6 +537,17 @@ class GameSessionService
             }
         }
 
+        if ($lastWord !== null) {
+            $this->applyLastWordAward(
+                $session,
+                $turn,
+                (int) $lastWord['word_id'],
+                array_key_exists('award_team_id', $lastWord) && $lastWord['award_team_id'] !== null
+                    ? (int) $lastWord['award_team_id']
+                    : null,
+            );
+        }
+
         $turn->setIsFinished(true);
         $this->entityManager->flush();
 
@@ -475,15 +576,127 @@ class GameSessionService
             $this->entityManager->flush();
         }
 
-        return [
+        $state = $this->getState($session);
+
+        return array_merge($state, [
             'score_change' => $scoreChange,
             'new_team_score' => $team->getScore(),
             'next_team' => ['id' => $nextTeam?->getId(), 'name' => $nextTeam?->getName()],
-            'next_player' => ['id' => $nextPlayer?->getId(), 'name' => $nextPlayer?->getName()],
+            'next_player' => ['id' => $nextPlayer?->getId(), 'name' => $nextPlayer?->getName(), 'avatar_id' => $nextPlayer?->getAvatarId()],
             'round_finished' => $roundFinished,
             'game_finished' => $gameFinished,
-            'remaining_words' => $roundFinished ? 0 : $unguessed,
-        ];
+        ]);
+    }
+
+    /**
+     * @param list<array{word_id: int, action: string}> $actions
+     */
+    private function applyClientActions(GameSession $session, GameTurn $turn, array $actions): void
+    {
+        $player = $turn->getPlayer();
+        $team = $turn->getTeam();
+        $round = $session->getRoundNumber();
+        $seen = [];
+
+        foreach ($actions as $item) {
+            $wordId = (int) ($item['word_id'] ?? 0);
+            $action = (string) ($item['action'] ?? '');
+            if ($wordId <= 0 || !in_array($action, ['guess', 'skip'], true)) {
+                throw new \InvalidArgumentException('Invalid action in turn log');
+            }
+            if (isset($seen[$wordId])) {
+                throw new \InvalidArgumentException('Duplicate word in turn log');
+            }
+            $seen[$wordId] = true;
+
+            $word = $this->entityManager->find(Word::class, $wordId);
+            if (!$word) {
+                throw new \InvalidArgumentException('Word not found: '.$wordId);
+            }
+
+            $progress = $this->roundProgressRepository->findBySessionWordRound(
+                (int) $session->getId(),
+                $wordId,
+                $round
+            );
+            if (!$progress) {
+                throw new \InvalidArgumentException('Word is not in this round: '.$wordId);
+            }
+            if ($progress->isGuessedInThisRound()) {
+                throw new \InvalidArgumentException('Word already guessed: '.$wordId);
+            }
+
+            $status = $action === 'guess' ? TurnLog::STATUS_GUESSED : TurnLog::STATUS_SKIPPED;
+
+            $log = new TurnLog();
+            $log->setSession($session);
+            $log->setTeam($team);
+            $log->setPlayer($player);
+            $log->setRound($round);
+            $log->setWord($word);
+            $log->setStatus($status);
+            $log->setGameTurn($turn);
+            $turn->addTurnLog($log);
+            $this->entityManager->persist($log);
+
+            if ($action === 'guess') {
+                $progress->setIsGuessedInThisRound(true);
+
+                $state = $this->teamDifficultyStateRepository->findBySessionTeamRound(
+                    (int) $session->getId(),
+                    (int) $team->getId(),
+                    $round
+                );
+                $state?->applyGuessDifficultyUpdate();
+            }
+        }
+
+        $this->entityManager->flush();
+    }
+
+    private function applyLastWordAward(
+        GameSession $session,
+        GameTurn $turn,
+        int $wordId,
+        ?int $awardTeamId,
+    ): void {
+        $word = $this->entityManager->find(Word::class, $wordId);
+        if (!$word) {
+            throw new \InvalidArgumentException('Last word not found');
+        }
+
+        $round = $session->getRoundNumber();
+        $progress = $this->roundProgressRepository->findBySessionWordRound(
+            (int) $session->getId(),
+            $wordId,
+            $round
+        );
+        if (!$progress) {
+            throw new \InvalidArgumentException('Last word is not in this round');
+        }
+
+        if ($awardTeamId === null) {
+            return;
+        }
+
+        $awardTeam = $this->entityManager->find(Team::class, $awardTeamId);
+        if (!$awardTeam || $awardTeam->getSession()?->getId() !== $session->getId()) {
+            throw new \InvalidArgumentException('Invalid last-word team');
+        }
+
+        if ($progress->isGuessedInThisRound()) {
+            return;
+        }
+
+        $progress->setIsGuessedInThisRound(true);
+        $awardTeam->setScore($awardTeam->getScore() + 1);
+
+        $state = $this->teamDifficultyStateRepository->findBySessionTeamRound(
+            (int) $session->getId(),
+            (int) $awardTeam->getId(),
+            $round
+        );
+        $state?->applyGuessDifficultyUpdate();
     }
 
     public function getState(GameSession $session): array
@@ -541,9 +754,9 @@ class GameSessionService
             'current_player' => $currentPlayer ? [
                 'id' => $currentPlayer->getId(),
                 'name' => $currentPlayer->getName(),
+                'avatar_id' => $currentPlayer->getAvatarId(),
             ] : null,
             'team_difficulty_state' => $difficultyState,
-            'next_players' => $this->nextPlayerCalculator->peekNextPlayers($session),
             'time_limit' => $session->getTurnTimeLimit(),
             'is_turn_active' => false,
             'turn_time_remaining' => null,
@@ -604,6 +817,7 @@ class GameSessionService
                 $players[$pid] = [
                     'id' => $player->getId(),
                     'name' => $player->getName(),
+                    'avatar_id' => $player->getAvatarId(),
                     'team_id' => $team->getId(),
                     'team_name' => $team->getName(),
                     'guessed' => 0,

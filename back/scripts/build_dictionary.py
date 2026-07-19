@@ -38,21 +38,12 @@ TARGETS: dict[str, int] = {
     "random_phrases": 650,
 }
 
-MAX_LEVEL: dict[str, int] = {
-    "clothes": 3,
-    "furniture": 3,
-    "celebrities": 3,
-    "sport": 4,
-    "places": 4,
-    "transport": 4,
-    "animals": 5,
-    "nature": 5,
-    "movies": 5,
-    "profession": 5,
-    "feelings": 5,
-    "phrases": 5,
-    "random_phrases": 5,
-}
+# Все категории: L1–5 = переразмеченный пул, L6 = жёсткий curated.
+MAX_LEVEL: dict[str, int] = {cat: 6 for cat in (
+    "everyday", "food", "animals", "nature", "movies", "places", "transport",
+    "clothes", "furniture", "profession", "school", "celebrities", "feelings",
+    "sport", "tech", "phrases", "random_phrases",
+)}
 
 DEFAULT_MAX = 6
 

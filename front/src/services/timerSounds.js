@@ -79,13 +79,19 @@ export function playTurnStart() {
   ])
 }
 
-/** За 5 секунд до конца — тройной звонок */
-export function playFiveSecondWarning() {
+/** За 10 секунд до конца — тройной звонок */
+export function playTenSecondWarning() {
   playSequence([
     { freq: 880, at: 0, dur: 0.15, vol: 0.7, type: 'triangle' },
     { freq: 840, at: 0.14, dur: 0.15, vol: 0.7, type: 'triangle' },
     { freq: 800, at: 0.28, dur: 0.15, vol: 0.7, type: 'triangle' },
   ])
+}
+
+/** Пик обратного отсчёта (5…1) — короткий щелчок, выше ближе к нулю */
+export function playCountdownTick(secondsLeft) {
+  const freq = 660 + (5 - Math.min(Math.max(secondsLeft, 1), 5)) * 80
+  playSequence([{ freq, at: 0, dur: 0.08, vol: 0.65, type: 'square' }])
 }
 
 /** Время вышло — нисходящий гонг */

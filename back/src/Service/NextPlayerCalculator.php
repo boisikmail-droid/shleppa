@@ -109,6 +109,7 @@ class NextPlayerCalculator
             $result[] = [
                 'team_name' => $nextTeam->getName(),
                 'player_name' => $nextPlayer->getName(),
+                'avatar_id' => $nextPlayer->getAvatarId(),
             ];
             $simTeam = $nextTeam;
             $simPlayer = $nextPlayer;

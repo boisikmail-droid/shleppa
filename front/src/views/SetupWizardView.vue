@@ -38,17 +38,34 @@
       </div>
 
       <h3 class="section-title">Список игроков</h3>
-      <p class="setup__hint">Сначала всех в общий список — потом перемешаем по командам.</p>
-      <div v-for="(_, pi) in playerPool" :key="'p' + pi" class="player-row">
+      <p class="setup__hint">Сначала всех в общий список — потом перемешаем по командам. Аватар можно сменить, если не подошёл.</p>
+      <div v-for="(player, pi) in playerPool" :key="'p' + pi" class="setup__player-row">
+        <button
+          type="button"
+          class="setup__avatar-btn"
+          title="Выбрать аватар"
+          @click="openAvatarPicker('pool', pi)"
+        >
+          <PlayerAvatar :avatar-id="player.avatarId" size="md" />
+        </button>
         <input
-          v-model="playerPool[pi]"
+          v-model="player.name"
           type="text"
           placeholder="Имя игрока"
           maxlength="100"
         />
         <button
+          type="button"
+          class="setup__icon-btn"
+          title="Случайный аватар"
+          @click="rerollPoolAvatar(pi)"
+        >
+          🎲
+        </button>
+        <button
           v-if="playerPool.length > 1"
           type="button"
+          class="setup__icon-btn"
           @click="removePoolPlayer(pi)"
         >
           ✕
@@ -95,7 +112,25 @@
 
           <label>Игроки после перемешки</label>
           <ul class="setup__roster">
-            <li v-for="(name, ni) in team.players" :key="ni">{{ name }}</li>
+            <li v-for="(player, ni) in team.players" :key="ni" class="setup__roster-player">
+              <button
+                type="button"
+                class="setup__avatar-btn setup__avatar-btn--sm"
+                title="Выбрать аватар"
+                @click="openAvatarPicker('team', ti, ni)"
+              >
+                <PlayerAvatar :avatar-id="player.avatarId" size="sm" />
+              </button>
+              <span class="setup__roster-name">{{ player.name }}</span>
+              <button
+                type="button"
+                class="setup__icon-btn setup__icon-btn--sm"
+                title="Случайный аватар"
+                @click="rerollTeamAvatar(ti, ni)"
+              >
+                🎲
+              </button>
+            </li>
             <li v-if="!team.players.length" class="setup__roster-empty">пока пусто</li>
           </ul>
         </div>
@@ -158,27 +193,33 @@
     <section v-else class="setup__panel">
       <h3 class="section-title">Сложность слов</h3>
       <p class="setup__hint">По умолчанию выбрано всё. Снимите лишнее.</p>
-      <label
-        v-for="level in DIFFICULTY_LEVELS"
-        :key="level.id"
-        class="setup__check"
-      >
-        <input v-model="selectedDifficulties" type="checkbox" :value="level.id" />
-        <span>
-          <strong>{{ level.label }}</strong>
-          <em>({{ level.examples }})</em>
-        </span>
-      </label>
+      <div class="setup__diff-list">
+        <label
+          v-for="level in DIFFICULTY_LEVELS"
+          :key="level.id"
+          class="setup__diff"
+        >
+          <input v-model="selectedDifficulties" type="checkbox" :value="level.id" />
+          <span class="setup__diff-text">
+            <strong>{{ level.label }}</strong>
+            <em>{{ level.examples }}</em>
+          </span>
+        </label>
+      </div>
 
       <h3 class="section-title setup__cat-title">Категории по смыслу</h3>
-      <label
-        v-for="cat in CATEGORIES"
-        :key="cat.id"
-        class="setup__check"
-      >
-        <input v-model="selectedCategories" type="checkbox" :value="cat.id" />
-        <span>{{ cat.label }}</span>
-      </label>
+      <div class="setup__cat-grid">
+        <label
+          v-for="cat in CATEGORIES"
+          :key="cat.id"
+          class="setup__cat"
+          :class="{ 'setup__cat--on': selectedCategories.includes(cat.id) }"
+        >
+          <input v-model="selectedCategories" type="checkbox" :value="cat.id" />
+          <CategoryIcon :name="cat.icon" class="setup__cat-icon" />
+          <span class="setup__cat-label">{{ cat.label }}</span>
+        </label>
+      </div>
 
       <div class="sound-row">
         <button type="button" class="button-secondary sound-row__test" @click="onTestSound">
@@ -191,12 +232,14 @@
       </div>
 
       <div class="setup__nav">
-        <button type="button" class="button-secondary" @click="step = 2">Назад</button>
+        <button type="button" class="button-secondary" :disabled="loading" @click="step = 2">Назад</button>
         <button type="button" class="button-primary" :disabled="loading" @click="startGame">
           {{ loading ? 'Создание...' : 'Начать игру' }}
         </button>
       </div>
     </section>
+
+    <SyncOverlay :phase="loading ? 'creating' : null" />
 
     <div
       v-if="hatPickerTeam !== null"
@@ -226,6 +269,61 @@
         </div>
       </div>
     </div>
+
+    <div
+      v-if="avatarPicker"
+      class="hat-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Выбор аватара"
+      @click.self="closeAvatarPicker"
+    >
+      <div class="hat-modal__sheet">
+        <div class="hat-modal__head">
+          <h3 class="hat-modal__title">Аватар игрока</h3>
+          <button type="button" class="hat-modal__close" @click="closeAvatarPicker">✕</button>
+        </div>
+        <div class="avatar-filter">
+          <button
+            type="button"
+            class="setup__chip"
+            :class="{ 'setup__chip--on': avatarFilter === 'all' }"
+            @click="avatarFilter = 'all'"
+          >
+            Все
+          </button>
+          <button
+            type="button"
+            class="setup__chip"
+            :class="{ 'setup__chip--on': avatarFilter === 'm' }"
+            @click="avatarFilter = 'm'"
+          >
+            Парни
+          </button>
+          <button
+            type="button"
+            class="setup__chip"
+            :class="{ 'setup__chip--on': avatarFilter === 'f' }"
+            @click="avatarFilter = 'f'"
+          >
+            Девушки
+          </button>
+        </div>
+        <div class="hat-modal__grid">
+          <button
+            v-for="av in filteredAvatars"
+            :key="av.id"
+            type="button"
+            class="hat-modal__opt"
+            :class="{ 'hat-modal__opt--on': currentPickerAvatarId === av.id }"
+            @click="chooseAvatarFromPicker(av.id)"
+          >
+            <img :src="av.src" :alt="av.label" />
+            <span>{{ av.label }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -243,6 +341,16 @@ import {
 import { DIFFICULTY_LEVELS, CATEGORIES } from '../constants/difficulty'
 import { pickTeamNames, pickOneTeamName } from '../constants/teamNames'
 import { HATS, pickHatIds, pickOneHatId, getHat } from '../constants/hats'
+import {
+  AVATARS,
+  AVATAR_MALES,
+  AVATAR_FEMALES,
+  pickAvatarIds,
+  pickOneAvatarId,
+} from '../constants/avatars'
+import CategoryIcon from '../components/CategoryIcon.vue'
+import PlayerAvatar from '../components/PlayerAvatar.vue'
+import SyncOverlay from '../components/SyncOverlay.vue'
 
 const router = useRouter()
 const sessionStore = useSessionStore()
@@ -257,7 +365,7 @@ const stepTitles = [
 
 const teamCount = ref(2)
 const teams = ref(makeTeams(2))
-const playerPool = ref(['', '', '', ''])
+const playerPool = ref(makeEmptyPlayers(4))
 const shuffledOnce = ref(false)
 const totalWords = ref(60)
 const timeLimit = ref(60)
@@ -270,6 +378,8 @@ const soundOn = ref(isSoundEnabled())
 const loading = ref(false)
 const error = ref('')
 const hatPickerTeam = ref(null)
+const avatarPicker = ref(null)
+const avatarFilter = ref('all')
 
 const penaltyWord = computed(() => {
   const n = skipPenalty.value
@@ -277,6 +387,42 @@ const penaltyWord = computed(() => {
   if (n >= 2 && n <= 4) return 'балла'
   return 'баллов'
 })
+
+const filteredAvatars = computed(() => {
+  if (avatarFilter.value === 'm') return AVATAR_MALES
+  if (avatarFilter.value === 'f') return AVATAR_FEMALES
+  return AVATARS
+})
+
+const currentPickerAvatarId = computed(() => {
+  const p = avatarPicker.value
+  if (!p) return null
+  if (p.scope === 'pool') return playerPool.value[p.pi]?.avatarId || null
+  return teams.value[p.ti]?.players?.[p.ni]?.avatarId || null
+})
+
+function makeEmptyPlayers(n) {
+  const ids = pickAvatarIds(n)
+  return ids.map((avatarId) => ({ name: '', avatarId }))
+}
+
+function usedAvatarIds(except = null) {
+  const ids = []
+  if (!shuffledOnce.value) {
+    playerPool.value.forEach((p, i) => {
+      if (except?.scope === 'pool' && except.pi === i) return
+      if (p.avatarId) ids.push(p.avatarId)
+    })
+  } else {
+    teams.value.forEach((t, ti) => {
+      ;(t.players || []).forEach((p, ni) => {
+        if (except?.scope === 'team' && except.ti === ti && except.ni === ni) return
+        if (p.avatarId) ids.push(p.avatarId)
+      })
+    })
+  }
+  return ids
+}
 
 function makeTeams(n, excludeNames = [], excludeHats = []) {
   const names = pickTeamNames(n, excludeNames)
@@ -289,7 +435,9 @@ function makeTeams(n, excludeNames = [], excludeHats = []) {
 }
 
 function namedPool() {
-  return playerPool.value.map((p) => p.trim()).filter(Boolean)
+  return playerPool.value
+    .map((p) => ({ name: p.name.trim(), avatarId: p.avatarId || 'm01' }))
+    .filter((p) => p.name)
 }
 
 function shuffleArray(arr) {
@@ -303,16 +451,16 @@ function shuffleArray(arr) {
 
 function shuffleIntoTeams() {
   error.value = ''
-  const names = namedPool()
-  if (names.length < teamCount.value) {
+  const named = namedPool()
+  if (named.length < teamCount.value) {
     error.value = `Нужно минимум ${teamCount.value} игрока с именами (по одному на команду)`
     return
   }
 
-  const shuffled = shuffleArray(names)
+  const shuffled = shuffleArray(named)
   const buckets = Array.from({ length: teamCount.value }, () => [])
-  shuffled.forEach((name, i) => {
-    buckets[i % teamCount.value].push(name)
+  shuffled.forEach((player, i) => {
+    buckets[i % teamCount.value].push({ ...player })
   })
 
   teams.value = teams.value.map((t, i) => ({
@@ -324,7 +472,10 @@ function shuffleIntoTeams() {
 
 function addPoolPlayer() {
   if (playerPool.value.length < 40) {
-    playerPool.value.push('')
+    playerPool.value.push({
+      name: '',
+      avatarId: pickOneAvatarId(usedAvatarIds()),
+    })
   }
 }
 
@@ -332,6 +483,74 @@ function removePoolPlayer(pi) {
   if (playerPool.value.length > 1) {
     playerPool.value.splice(pi, 1)
   }
+}
+
+function rerollPoolAvatar(pi) {
+  playerPool.value[pi].avatarId = pickOneAvatarId(
+    usedAvatarIds({ scope: 'pool', pi })
+  )
+}
+
+function rerollTeamAvatar(ti, ni) {
+  teams.value[ti].players[ni].avatarId = pickOneAvatarId(
+    usedAvatarIds({ scope: 'team', ti, ni })
+  )
+}
+
+function openAvatarPicker(scope, a, b = null) {
+  avatarFilter.value = 'all'
+  if (scope === 'pool') {
+    avatarPicker.value = { scope: 'pool', pi: a }
+  } else {
+    avatarPicker.value = { scope: 'team', ti: a, ni: b }
+  }
+}
+
+function closeAvatarPicker() {
+  avatarPicker.value = null
+}
+
+function chooseAvatarFromPicker(avatarId) {
+  const p = avatarPicker.value
+  if (!p) return
+
+  const takenElsewhere = (() => {
+    if (p.scope === 'pool') {
+      return usedAvatarIds({ scope: 'pool', pi: p.pi }).includes(avatarId)
+    }
+    return usedAvatarIds({ scope: 'team', ti: p.ti, ni: p.ni }).includes(avatarId)
+  })()
+
+  if (takenElsewhere) {
+    // swap with whoever has it
+    let swapFrom = null
+    if (!shuffledOnce.value) {
+      playerPool.value.forEach((pl, i) => {
+        if (pl.avatarId === avatarId) swapFrom = { scope: 'pool', pi: i }
+      })
+    } else {
+      teams.value.forEach((t, ti) => {
+        t.players.forEach((pl, ni) => {
+          if (pl.avatarId === avatarId) swapFrom = { scope: 'team', ti, ni }
+        })
+      })
+    }
+    const currentId = currentPickerAvatarId.value
+    if (swapFrom && currentId) {
+      if (swapFrom.scope === 'pool') {
+        playerPool.value[swapFrom.pi].avatarId = currentId
+      } else {
+        teams.value[swapFrom.ti].players[swapFrom.ni].avatarId = currentId
+      }
+    }
+  }
+
+  if (p.scope === 'pool') {
+    playerPool.value[p.pi].avatarId = avatarId
+  } else {
+    teams.value[p.ti].players[p.ni].avatarId = avatarId
+  }
+  closeAvatarPicker()
 }
 
 function rerollName(ti) {
@@ -435,7 +654,12 @@ async function startGame() {
     const { data } = await api.createSession({
       teams: teams.value.map((t) => ({
         name: t.name.trim(),
-        players: t.players.map((p) => p.trim()).filter(Boolean),
+        players: t.players
+          .map((p) => ({
+            name: (typeof p === 'string' ? p : p.name).trim(),
+            avatar_id: typeof p === 'string' ? 'm01' : (p.avatarId || 'm01'),
+          }))
+          .filter((p) => p.name),
         hat_id: t.hatId || 'tophat',
       })),
       total_words: totalWords.value,
@@ -446,7 +670,7 @@ async function startGame() {
       last_word_common: lastWordCommon.value,
     })
     sessionStore.setSessionId(data.session_id)
-    router.push(`/game/${data.session_id}`)
+    await router.push(`/game/${data.session_id}`)
   } catch (e) {
     const msgs = e.response?.data?.errors
     error.value = Array.isArray(msgs) ? msgs.join('; ') : (e.response?.data?.error || 'Не удалось создать игру')
@@ -457,8 +681,8 @@ async function startGame() {
 
 onMounted(async () => {
   await vkStore.bootstrap()
-  if (vkStore.displayName && !playerPool.value[0]) {
-    playerPool.value[0] = vkStore.displayName
+  if (vkStore.displayName && !playerPool.value[0]?.name) {
+    playerPool.value[0].name = vkStore.displayName
   }
 })
 </script>
@@ -564,21 +788,95 @@ onMounted(async () => {
   margin: 0;
   padding: 0;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
 }
 
-.setup__roster li {
-  padding: 6px 10px;
+.setup__roster-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-size: 0.9rem;
+}
+
+.setup__roster-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.95rem;
 }
 
 .setup__roster-empty {
   color: var(--text-muted);
   border-style: dashed !important;
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+}
+
+.setup__player-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.setup__player-row input {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.setup__avatar-btn {
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+  flex-shrink: 0;
+}
+
+.setup__avatar-btn:hover {
+  border-color: var(--gold);
+}
+
+.setup__avatar-btn--sm {
+  border-radius: 8px;
+}
+
+.setup__icon-btn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.setup__icon-btn--sm {
+  width: 32px;
+  height: 32px;
+  font-size: 0.85rem;
+}
+
+.setup__icon-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.avatar-filter {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 4px 0 10px;
 }
 
 .setup__hat-current {
@@ -766,8 +1064,119 @@ onMounted(async () => {
   margin-top: 2px;
 }
 
+.setup__diff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 0.25rem;
+}
+
+.setup__diff {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--table-line);
+  cursor: pointer;
+  font-size: 0.88rem;
+  line-height: 1.25;
+}
+
+.setup__diff:last-child {
+  border-bottom: none;
+}
+
+.setup__diff input {
+  flex-shrink: 0;
+  margin: 0;
+  accent-color: var(--gold);
+  transform: translateY(1px);
+}
+
+.setup__diff-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.4em;
+  min-width: 0;
+}
+
+.setup__diff-text strong {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.setup__diff-text em {
+  font-style: normal;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.setup__diff-text em::before {
+  content: '· ';
+  color: var(--text-dim);
+}
+
 .setup__cat-title {
-  margin-top: 1rem;
+  margin-top: 0.75rem;
+  margin-bottom: 0.15rem;
+}
+
+.setup__cat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.setup__cat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  cursor: pointer;
+  text-align: center;
+  color: var(--text-muted);
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.setup__cat--on {
+  border-color: color-mix(in srgb, var(--gold) 60%, var(--border));
+  color: var(--text);
+  background: var(--hint-bg);
+}
+
+.setup__cat input {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  margin: 0;
+  width: 0.85rem;
+  height: 0.85rem;
+  accent-color: var(--gold);
+}
+
+.setup__cat-icon {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 7px;
+}
+
+.setup__cat-label {
+  max-width: 100%;
+  padding: 0 2px;
+  font-size: 0.62rem;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .setup__nav {
